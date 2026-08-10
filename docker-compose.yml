@@ -9,7 +9,8 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     # Teto de memória: se estourar, o Docker mata SÓ o Ollama (protege os outros containers).
-    mem_limit: 5g
+    # 3b cabe em 5g. Para testar o 8b, suba p/ 6g no Environment do Dokploy (OLLAMA_MEM_LIMIT=6g).
+    mem_limit: ${OLLAMA_MEM_LIMIT:-5g}
     networks:
       - hermes
 
@@ -19,7 +20,8 @@ services:
     environment:
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - OLLAMA_URL=http://ollama:11434
-      - OLLAMA_MODEL=hermes3:3b
+      # Troque p/ hermes3:8b no Environment do Dokploy (OLLAMA_MODEL=hermes3:8b) p/ testar o modelo maior.
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-hermes3:3b}
       - SYSTEM_PROMPT=Você é o Hermes, um assistente útil e direto. Responda em português do Brasil.
       # Opcional: restringe quem pode usar o bot. Deixe vazio p/ liberar a todos.
       - ALLOWED_CHAT_IDS=${ALLOWED_CHAT_IDS:-}

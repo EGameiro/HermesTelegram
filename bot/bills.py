@@ -51,6 +51,17 @@ def listar(chat_id, incluir_pagas=False):
         return [dict(r) for r in con.execute(q, (chat_id,)).fetchall()]
 
 
+def listar_periodo(chat_id, ini_iso, fim_iso):
+    """Contas pendentes com vencimento entre ini e fim (inclusive), ordenadas."""
+    with _conn() as con:
+        rows = con.execute(
+            "SELECT * FROM contas WHERE chat_id=? AND pago=0 AND vencimento BETWEEN ? AND ? "
+            "ORDER BY vencimento",
+            (chat_id, ini_iso, fim_iso),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
 def marcar_pago(chat_id, conta_id):
     with _conn() as con:
         cur = con.execute("UPDATE contas SET pago=1 WHERE id=? AND chat_id=?", (conta_id, chat_id))

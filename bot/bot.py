@@ -4,7 +4,7 @@ import json
 import time
 import logging
 import threading
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 
 import requests
@@ -163,7 +163,83 @@ def is_bill_list(text):
     if not BILLS_ENABLED:
         return False
     low = text.lower()
-    return low.strip() == "/contas" or any(kw in low for kw in _BILL_LIST_KW)
+    if low.strip() == "/contas":
+        return True
+    if any(kw in low for kw in _BILL_LIST_KW):
+        return True
+    # "quanto/total ... pagar" → também é consulta de contas
+    if "pagar" in low and ("quanto" in low or "total" in low):
+        return True
+    return False
+
+
+def _periodo(text):
+    """Extrai o período da pergunta. Retorna (label, ini_iso, fim_iso); (None,None,None) = todas."""
+    low = text.lower()
+    hoje = date.today()
+
+    m = re.search(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b", low)
+    if m:
+        try:
+            d, mth = int(m.group(1)), int(m.group(2))
+            y = int(m.group(3)) if m.group(3) else hoje.year
+            if y < 100:
+                y += 2000
+            alvo = date(y, mth, d)
+            if alvo < hoje and not m.group(3):
+                alvo = alvo.replace(year=alvo.year + 1)
+            return (f"em {alvo.strftime('%d/%m/%Y')}", alvo.isoformat(), alvo.isoformat())
+        except ValueError:
+            pass
+
+    m2 = re.search(r"\bdia\s+(\d{1,2})\b", low)
+    if m2:
+        try:
+            d = int(m2.group(1))
+            alvo = date(hoje.year, hoje.month, d)
+            if alvo < hoje:
+                alvo = (date(hoje.year + 1, 1, d) if hoje.month == 12
+                        else date(hoje.year, hoje.month + 1, d))
+            return (f"em {alvo.strftime('%d/%m/%Y')}", alvo.isoformat(), alvo.isoformat())
+        except ValueError:
+            pass
+
+    if "amanhã" in low or "amanha" in low:
+        d = hoje + timedelta(days=1)
+        return (f"amanhã ({d.strftime('%d/%m')})", d.isoformat(), d.isoformat())
+    if "hoje" in low:
+        return (f"hoje ({hoje.strftime('%d/%m')})", hoje.isoformat(), hoje.isoformat())
+    if "atrasad" in low or "vencid" in low or "em atraso" in low:
+        return ("em atraso", "0001-01-01", (hoje - timedelta(days=1)).isoformat())
+    if "semana" in low or "7 dias" in low or "sete dias" in low:
+        return ("nos próximos 7 dias", hoje.isoformat(), (hoje + timedelta(days=7)).isoformat())
+    if "mês" in low or " mes" in low or "mês" in low:
+        prox = date(hoje.year + 1, 1, 1) if hoje.month == 12 else date(hoje.year, hoje.month + 1, 1)
+        return (f"em {hoje.strftime('%m/%Y')}", hoje.isoformat(), (prox - timedelta(days=1)).isoformat())
+
+    return (None, None, None)
+
+
+def formatar_resposta_contas(chat_id, text):
+    label, ini, fim = _periodo(text)
+    if ini:
+        contas = bills.listar_periodo(chat_id, ini, fim)
+        periodo = label
+    else:
+        contas = bills.listar(chat_id, incluir_pagas=False)
+        periodo = None
+
+    if not contas:
+        return f"Você não tem contas a pagar {periodo}. 🎉" if periodo else "Você não tem contas pendentes. 🎉"
+
+    total = sum((c["valor"] or 0) for c in contas)
+    titulo = f"💰 Total a pagar {periodo}: {_fmt_valor(total)}" if periodo else \
+        f"💰 Total a pagar (todas as pendentes): {_fmt_valor(total)}"
+    linhas = [titulo, ""]
+    for c in contas:
+        linhas.append(f"• #{c['id']} {c['descricao']}: {_fmt_valor(c['valor'])} — vence {_fmt_data(c['vencimento'])}")
+    linhas.append("\nMarcar como paga: /pago <número ou nome>.")
+    return "\n".join(linhas)
 
 
 def _strip_json(s):
@@ -254,17 +330,6 @@ def _valor_falado(v):
     if centavos:
         txt += f" e {centavos} centavos"
     return txt
-
-
-def formatar_lista(chat_id):
-    contas = bills.listar(chat_id, incluir_pagas=False)
-    if not contas:
-        return "Você não tem contas pendentes. 🎉"
-    linhas = ["📋 Suas contas a pagar:"]
-    for c in contas:
-        linhas.append(f"#{c['id']} — {c['descricao']}: {_fmt_valor(c['valor'])} — vence {_fmt_data(c['vencimento'])}")
-    linhas.append("\nMarcar como paga: /pago <número ou nome>. Remover: /remover <número>.")
-    return "\n".join(linhas)
 
 
 def enviar_lembretes():
@@ -574,7 +639,7 @@ def handle(update):
         send_message(chat_id, "🗑️ Conta removida." if ok else "Não achei uma conta com esse número.")
         return
     if is_bill_list(text):
-        send_message(chat_id, formatar_lista(chat_id))
+        send_message(chat_id, formatar_resposta_contas(chat_id, text))
         return
     if is_bill_add(text):
         send_typing(chat_id)

@@ -81,10 +81,12 @@ def ensure_model():
         log.error("Ollama não respondeu a tempo — o bot vai tentar mesmo assim.")
         return
 
+    # Nome exato COM tag (Ollama guarda "hermes3" como "hermes3:latest").
+    wanted = OLLAMA_MODEL if ":" in OLLAMA_MODEL else f"{OLLAMA_MODEL}:latest"
     tags = requests.get(f"{OLLAMA_URL}/api/tags", timeout=10).json()
     names = [m.get("name", "") for m in tags.get("models", [])]
-    if any(n == OLLAMA_MODEL or n.split(":")[0] == OLLAMA_MODEL.split(":")[0] for n in names):
-        log.info("Modelo já presente. OK.")
+    if wanted in names:
+        log.info("Modelo %s já presente. OK.", wanted)
         return
 
     log.info("Baixando modelo %s (pode demorar alguns minutos na primeira vez)...", OLLAMA_MODEL)

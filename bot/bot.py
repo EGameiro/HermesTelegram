@@ -1,6 +1,8 @@
 import os
 import time
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -16,6 +18,21 @@ SYSTEM_PROMPT = os.environ.get(
 )
 MAX_HISTORY = int(os.environ.get("MAX_HISTORY", "12"))  # mensagens (user+assistant) por chat
 REQUEST_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "300"))  # geração em CPU pode demorar
+TZ = os.environ.get("TZ", "America/Sao_Paulo")  # fuso usado p/ informar data/hora ao modelo
+
+_DIAS = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+         "sexta-feira", "sábado", "domingo"]
+
+
+def system_prompt_agora():
+    """O modelo não tem relógio próprio — injetamos a data/hora real a cada mensagem."""
+    now = datetime.now(ZoneInfo(TZ))
+    dia = _DIAS[now.weekday()]
+    return (
+        f"{SYSTEM_PROMPT}\n\n"
+        f"Data e hora atuais (fuso {TZ}): {dia}, {now.strftime('%d/%m/%Y %H:%M')}. "
+        f"Use esta informação quando perguntarem sobre data, dia ou hora."
+    )
 
 # Restringe o bot a chat_ids autorizados (lista separada por vírgula). Vazio = liberado p/ todos.
 ALLOWED = {c.strip() for c in os.environ.get("ALLOWED_CHAT_IDS", "").split(",") if c.strip()}
@@ -74,7 +91,7 @@ def ensure_model():
 
 
 def ask_hermes(chat_id, user_text):
-    msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
+    msgs = [{"role": "system", "content": system_prompt_agora()}]
     msgs += history.get(chat_id, [])
     msgs.append({"role": "user", "content": user_text})
 

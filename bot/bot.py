@@ -1,10 +1,13 @@
 import os
+import re
 import time
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import requests
+
+import weather
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("hermes-bot")
@@ -19,9 +22,65 @@ SYSTEM_PROMPT = os.environ.get(
 MAX_HISTORY = int(os.environ.get("MAX_HISTORY", "12"))  # mensagens (user+assistant) por chat
 REQUEST_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "300"))  # geração em CPU pode demorar
 TZ = os.environ.get("TZ", "America/Sao_Paulo")  # fuso usado p/ informar data/hora ao modelo
+WEATHER_ENABLED = os.environ.get("WEATHER_ENABLED", "true").lower() != "false"
+DEFAULT_CITY = os.environ.get("DEFAULT_CITY", "Jacareí")  # cidade padrão p/ previsão
 
 _DIAS = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
          "sexta-feira", "sábado", "domingo"]
+
+# Palavras que indicam pergunta sobre clima/tempo (evita o bare "tempo" p/ não confundir com duração).
+_WEATHER_KW = [
+    "previsão", "previsao", "clima", "chuva", "chover", "chovendo", "choveu",
+    "temperatura", "graus", "ensolarad", "nublad", "umidade", "faz frio", "faz calor",
+    "tá frio", "ta frio", "tá calor", "ta calor", "está frio", "está calor",
+    "do tempo", "tempo em", "tempo hoje", "tempo amanhã", "tempo amanha",
+    "tempo essa", "tempo nessa", "tempo esta", "tempo nesta",
+]
+
+# Cidade lembrada por chat (para previsão do tempo). Começa no padrão.
+chat_city: dict[int, str] = {}
+
+
+def is_weather_question(text):
+    t = text.lower()
+    return any(kw in t for kw in _WEATHER_KW)
+
+
+def extract_city(text):
+    """Tenta achar a cidade citada após 'em/para/pra/no/na'. O Open-Meteo valida depois."""
+    m = re.search(
+        r"\b(?:em|para|pra|no|na)\s+([A-Za-zÀ-ÿ][\wÀ-ÿ'\.]+(?:[\s\-][A-Za-zÀ-ÿ][\wÀ-ÿ'\.]+){0,3})",
+        text,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    cand = m.group(1).strip(" ?.!,").rstrip(".")
+    # descarta capturas óbvias que não são cidade
+    if cand.lower() in {"casa", "breve", "seguida", "que", "geral", "dia", "semana"}:
+        return None
+    return cand
+
+
+def weather_context(chat_id, text):
+    """Se for pergunta de clima, busca dados reais e devolve um bloco de contexto (ou None)."""
+    if not WEATHER_ENABLED or not is_weather_question(text):
+        return None
+    stored = chat_city.get(chat_id, DEFAULT_CITY)
+    cidade = extract_city(text) or stored
+    txt, err = weather.forecast_text(cidade)
+    if err and cidade != stored:  # cidade extraída falhou → tenta a lembrada/padrão
+        cidade = stored
+        txt, err = weather.forecast_text(cidade)
+    if txt:
+        return (
+            "DADOS REAIS DE PREVISÃO DO TEMPO (fonte Open-Meteo, use-os para responder "
+            f"e NÃO invente nada além disto):\n{txt}"
+        )
+    return (
+        f"O serviço de previsão do tempo não respondeu agora ({err}). "
+        "Avise o usuário que não conseguiu consultar a previsão neste momento e não invente dados."
+    )
 
 
 def system_prompt_agora():
@@ -97,8 +156,10 @@ def ensure_model():
     log.info("Download concluído.")
 
 
-def ask_hermes(chat_id, user_text):
+def ask_hermes(chat_id, user_text, extra_context=None):
     msgs = [{"role": "system", "content": system_prompt_agora()}]
+    if extra_context:
+        msgs.append({"role": "system", "content": extra_context})
     msgs += history.get(chat_id, [])
     msgs.append({"role": "user", "content": user_text})
 
@@ -135,6 +196,7 @@ def handle(update):
             "Olá! Eu sou o Hermes 🤖 rodando na sua VPS.\n"
             "Manda sua pergunta que eu respondo.\n\n"
             "/reset — apaga a memória da conversa\n"
+            f"/cidade <nome> — define sua cidade p/ previsão (atual: {chat_city.get(chat_id, DEFAULT_CITY)})\n"
             "/id — mostra seu chat_id",
         )
         return
@@ -145,10 +207,31 @@ def handle(update):
     if cmd == "/id":
         send_message(chat_id, f"Seu chat_id é: {chat_id}")
         return
+    if cmd.startswith("/cidade"):
+        nome = text.strip()[len("/cidade"):].strip()
+        if not nome:
+            send_message(chat_id, f"Sua cidade atual é: {chat_city.get(chat_id, DEFAULT_CITY)}.\nUse: /cidade São Paulo")
+            return
+        try:
+            g = weather.geocode(nome)
+        except Exception:
+            g = None
+        if not g:
+            send_message(chat_id, f"Não encontrei a cidade '{nome}'. Tente o nome completo, ex: /cidade Campos do Jordão")
+            return
+        chat_city[chat_id] = g.get("name", nome)
+        local = chat_city[chat_id] + (f", {g.get('admin1')}" if g.get("admin1") else "")
+        send_message(chat_id, f"Cidade definida: {local}. ✅ Agora é só perguntar a previsão.")
+        return
 
     send_typing(chat_id)
     try:
-        reply = ask_hermes(chat_id, text)
+        ctx = weather_context(chat_id, text)
+    except Exception:
+        log.exception("Erro ao montar contexto de clima")
+        ctx = None
+    try:
+        reply = ask_hermes(chat_id, text, extra_context=ctx)
     except Exception as e:
         log.exception("Erro ao consultar Hermes")
         send_message(chat_id, f"⚠️ Erro ao gerar resposta: {e}")

@@ -23,6 +23,9 @@ services:
       # Troque p/ hermes3:8b no Environment do Dokploy (OLLAMA_MODEL=hermes3:8b) p/ testar o modelo maior.
       - OLLAMA_MODEL=${OLLAMA_MODEL:-hermes3:3b}
       - SYSTEM_PROMPT=Você é o Hermes, um assistente útil e direto. Responda em português do Brasil.
+      # Previsão do tempo real (Open-Meteo, sem API key). Cidade padrão e liga/desliga.
+      - DEFAULT_CITY=${DEFAULT_CITY:-Jacareí}
+      - WEATHER_ENABLED=${WEATHER_ENABLED:-true}
       # Opcional: restringe quem pode usar o bot. Deixe vazio p/ liberar a todos.
       - ALLOWED_CHAT_IDS=${ALLOWED_CHAT_IDS:-}
     depends_on:

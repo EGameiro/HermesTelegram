@@ -30,8 +30,13 @@ def system_prompt_agora():
     dia = _DIAS[now.weekday()]
     return (
         f"{SYSTEM_PROMPT}\n\n"
-        f"Data e hora atuais (fuso {TZ}): {dia}, {now.strftime('%d/%m/%Y %H:%M')}. "
-        f"Use esta informação quando perguntarem sobre data, dia ou hora."
+        f"AGORA: hoje é {dia}, {now.strftime('%d/%m/%Y')}, e são {now.strftime('%H:%M')} "
+        f"(horário de {TZ}). Ao falar de data, dia da semana ou hora, use EXATAMENTE "
+        f"esses valores — não recalcule nem mude o dia da semana.\n"
+        f"Você NÃO tem acesso à internet nem a dados em tempo real. Nunca invente "
+        f"previsão do tempo, notícias, cotações, resultados ou qualquer informação que "
+        f"exija consulta ao vivo. Se perguntarem algo assim, responda com clareza que "
+        f"você não tem esse acesso, em vez de inventar dados."
     )
 
 # Restringe o bot a chat_ids autorizados (lista separada por vírgula). Vazio = liberado p/ todos.

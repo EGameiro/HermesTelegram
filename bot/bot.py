@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 import weather
+import websearch
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("hermes-bot")
@@ -24,6 +25,15 @@ REQUEST_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "300"))  # geração em C
 TZ = os.environ.get("TZ", "America/Sao_Paulo")  # fuso usado p/ informar data/hora ao modelo
 WEATHER_ENABLED = os.environ.get("WEATHER_ENABLED", "true").lower() != "false"
 DEFAULT_CITY = os.environ.get("DEFAULT_CITY", "Jacareí")  # cidade padrão p/ previsão
+WEBSEARCH_ENABLED = os.environ.get("WEBSEARCH_ENABLED", "true").lower() != "false"
+
+# Frases que indicam pedido de busca na web (além do comando /buscar). Conservador p/ evitar
+# disparar em toda pergunta comum (busca é lenta e pode ser bloqueada por excesso).
+_WEB_KW = [
+    "na internet", "na web", "no google", "pesquise", "pesquisa na", "pesquisar na",
+    "notícia", "noticia", "novidades sobre", "últimas notícias", "ultimas noticias",
+    "cotação", "cotacao", "o que estão falando", "o que estao falando", "acesse o site",
+]
 
 _DIAS = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
          "sexta-feira", "sábado", "domingo"]
@@ -80,6 +90,38 @@ def weather_context(chat_id, text):
     return (
         f"O serviço de previsão do tempo não respondeu agora ({err}). "
         "Avise o usuário que não conseguiu consultar a previsão neste momento e não invente dados."
+    )
+
+
+def web_query(text):
+    """Devolve o termo a buscar (comando /buscar|/web ou gatilho natural), ou None."""
+    if not WEBSEARCH_ENABLED:
+        return None
+    t = text.strip()
+    low = t.lower()
+    for pref in ("/buscar", "/web"):
+        if low.startswith(pref):
+            return t[len(pref):].strip() or None
+    if any(kw in low for kw in _WEB_KW):
+        return t
+    return None
+
+
+def web_context(text):
+    """Se for pedido de busca, consulta a web e devolve o bloco de contexto (ou None)."""
+    q = web_query(text)
+    if not q:
+        return None
+    resultados, err = websearch.search(q)
+    if resultados:
+        return (
+            f"RESULTADOS DE BUSCA NA WEB para \"{q}\" (use estes resultados para responder de "
+            f"forma atualizada e CITE as fontes com o link; se não bastarem, diga o que "
+            f"encontrou):\n\n{resultados}"
+        )
+    return (
+        f"A busca na web não retornou resultados agora ({err}). Diga ao usuário que não "
+        "conseguiu buscar e responda com o que souber, avisando que pode estar desatualizado."
     )
 
 
@@ -199,6 +241,7 @@ def handle(update):
             "Olá! Eu sou o Hermes 🤖 rodando na sua VPS.\n"
             "Manda sua pergunta que eu respondo.\n\n"
             "/reset — apaga a memória da conversa\n"
+            "/buscar <termo> — pesquisa na internet e responde com fontes\n"
             f"/cidade <nome> — define sua cidade p/ previsão (atual: {chat_city.get(chat_id, DEFAULT_CITY)})\n"
             "/id — mostra seu chat_id",
         )
@@ -229,9 +272,9 @@ def handle(update):
 
     send_typing(chat_id)
     try:
-        ctx = weather_context(chat_id, text)
+        ctx = weather_context(chat_id, text) or web_context(text)
     except Exception:
-        log.exception("Erro ao montar contexto de clima")
+        log.exception("Erro ao montar contexto (clima/web)")
         ctx = None
     try:
         reply = ask_hermes(chat_id, text, extra_context=ctx)

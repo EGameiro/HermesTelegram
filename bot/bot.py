@@ -33,6 +33,9 @@ BILLS_ENABLED = os.environ.get("BILLS_ENABLED", "true").lower() != "false"
 REMINDER_HOUR = int(os.environ.get("REMINDER_HOUR", "8"))  # hora do dia p/ enviar lembretes
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")  # p/ transcrever áudio (Whisper); vazio = voz off
 OPENAI_STT_MODEL = os.environ.get("OPENAI_STT_MODEL", "whisper-1")
+OPENAI_TTS_MODEL = os.environ.get("OPENAI_TTS_MODEL", "tts-1")  # texto->voz p/ lembretes
+OPENAI_TTS_VOICE = os.environ.get("OPENAI_TTS_VOICE", "nova")
+REMINDER_VOICE = os.environ.get("REMINDER_VOICE", "true").lower() != "false"  # lembrete em áudio
 
 # Contas aguardando confirmação do usuário: chat_id -> {"descricao","valor","vencimento"}
 pending_bill: dict[int, dict] = {}
@@ -241,6 +244,18 @@ def _fmt_data(iso):
         return iso
 
 
+def _valor_falado(v):
+    """Valor por extenso p/ o TTS soar natural (evita 'R$' lido letra a letra)."""
+    if v is None:
+        return "sem valor informado"
+    reais = int(v)
+    centavos = int(round((v - reais) * 100))
+    txt = f"{reais} {'real' if reais == 1 else 'reais'}"
+    if centavos:
+        txt += f" e {centavos} centavos"
+    return txt
+
+
 def formatar_lista(chat_id):
     contas = bills.listar(chat_id, incluir_pagas=False)
     if not contas:
@@ -253,17 +268,33 @@ def formatar_lista(chat_id):
 
 
 def enviar_lembretes():
-    """Chamado pelo agendador: avisa contas vencendo (uma vez por conta)."""
+    """Chamado pelo agendador: avisa contas vencendo (uma vez por conta). Áudio com fallback p/ texto."""
     try:
-        for c in bills.vencendo(date.today().isoformat()):
+        hoje_iso = date.today().isoformat()
+        for c in bills.vencendo(hoje_iso):
             venc = _fmt_data(c["vencimento"])
-            hoje = c["vencimento"] == date.today().isoformat()
-            quando = "vence HOJE" if hoje else f"venceu em {venc}"
-            send_message(
-                c["chat_id"],
-                f"🔔 Lembrete de conta a pagar:\n\n{c['descricao']}: {_fmt_valor(c['valor'])} — {quando}.\n\n"
-                f"Quando pagar, me avise: /pago {c['id']}",
+            hoje = c["vencimento"] == hoje_iso
+            quando_txt = "vence HOJE" if hoje else f"venceu em {venc}"
+            quando_falado = "vence hoje" if hoje else f"venceu em {venc}"
+            legenda = (
+                f"🔔 Lembrete de conta a pagar:\n\n{c['descricao']}: {_fmt_valor(c['valor'])} — {quando_txt}.\n\n"
+                f"Quando pagar, me avise: /pago {c['id']}"
             )
+            falado = (
+                f"Olá! Lembrete de conta a pagar. {c['descricao']}, "
+                f"{_valor_falado(c['valor'])}, {quando_falado}."
+            )
+            enviado = False
+            if REMINDER_VOICE and OPENAI_API_KEY:
+                audio = tts(falado)
+                if audio:
+                    try:
+                        send_voice(c["chat_id"], audio, caption=legenda)
+                        enviado = True
+                    except Exception:
+                        log.exception("sendVoice falhou; caindo p/ texto")
+            if not enviado:
+                send_message(c["chat_id"], legenda)
             bills.marcar_lembrete_enviado(c["id"])
     except Exception:
         log.exception("Erro ao enviar lembretes")
@@ -348,6 +379,41 @@ def transcrever_voz(file_id):
     except Exception:
         log.exception("Falha ao transcrever áudio")
         return None
+
+
+def tts(texto):
+    """Texto -> áudio Opus (bytes) via OpenAI TTS. Retorna bytes ou None em falha."""
+    try:
+        r = requests.post(
+            "https://api.openai.com/v1/audio/speech",
+            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+            json={
+                "model": OPENAI_TTS_MODEL,
+                "voice": OPENAI_TTS_VOICE,
+                "input": texto,
+                "response_format": "opus",
+            },
+            timeout=120,
+        )
+        r.raise_for_status()
+        return r.content
+    except Exception:
+        log.exception("Falha ao gerar áudio (TTS)")
+        return None
+
+
+def send_voice(chat_id, audio_bytes, caption=None):
+    data = {"chat_id": chat_id}
+    if caption:
+        data["caption"] = caption[:1000]
+    r = requests.post(
+        f"{TG}/sendVoice",
+        data=data,
+        files={"voice": ("lembrete.ogg", audio_bytes, "audio/ogg")},
+        timeout=60,
+    )
+    r.raise_for_status()
+    return r.json()
 
 
 def ensure_model():

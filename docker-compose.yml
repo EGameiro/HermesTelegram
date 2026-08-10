@@ -29,8 +29,10 @@ services:
       # Contas a pagar: banco SQLite persistente + hora do dia p/ enviar lembretes.
       - BILLS_DB=/data/bills.db
       - REMINDER_HOUR=${REMINDER_HOUR:-8}
-      # Transcrição de voz (Whisper da OpenAI). Vazio = áudio desligado.
+      # Transcrição de voz (Whisper) + lembretes em áudio (TTS), ambos via OpenAI. Vazio = voz off.
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - REMINDER_VOICE=${REMINDER_VOICE:-true}
+      - OPENAI_TTS_VOICE=${OPENAI_TTS_VOICE:-nova}
       # Opcional: restringe quem pode usar o bot. Deixe vazio p/ liberar a todos.
       - ALLOWED_CHAT_IDS=${ALLOWED_CHAT_IDS:-}
     volumes:

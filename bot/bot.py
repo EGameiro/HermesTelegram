@@ -92,10 +92,13 @@ def system_prompt_agora():
         f"AGORA: hoje é {dia}, {now.strftime('%d/%m/%Y')}, e são {now.strftime('%H:%M')} "
         f"(horário de {TZ}). Ao falar de data, dia da semana ou hora, use EXATAMENTE "
         f"esses valores — não recalcule nem mude o dia da semana.\n"
-        f"Você NÃO tem acesso à internet nem a dados em tempo real. Nunca invente "
-        f"previsão do tempo, notícias, cotações, resultados ou qualquer informação que "
-        f"exija consulta ao vivo. Se perguntarem algo assim, responda com clareza que "
-        f"você não tem esse acesso, em vez de inventar dados."
+        f"Responda normalmente usando o seu conhecimento — a maioria das perguntas "
+        f"(explicações, conceitos, história, ajuda, ideias, etc.) você sabe responder e "
+        f"deve responder à vontade. A ÚNICA exceção são dados que mudam em tempo real e "
+        f"que não foram fornecidos a você nesta conversa (ex.: previsão do tempo, notícias "
+        f"de hoje, cotações, placares ao vivo): apenas nesses casos, diga que não tem essa "
+        f"informação atualizada, em vez de inventar. Nunca recuse uma pergunta comum de "
+        f"conhecimento geral alegando falta de internet."
     )
 
 # Restringe o bot a chat_ids autorizados (lista separada por vírgula). Vazio = liberado p/ todos.

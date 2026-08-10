@@ -26,9 +26,11 @@ services:
       # Previsão do tempo real (Open-Meteo, sem API key). Cidade padrão e liga/desliga.
       - DEFAULT_CITY=${DEFAULT_CITY:-Jacareí}
       - WEATHER_ENABLED=${WEATHER_ENABLED:-true}
-      # Contas a pagar: banco SQLite persistente + hora do dia p/ enviar lembretes.
+      # Contas a pagar + compromissos: banco SQLite persistente, hora do lembrete de contas
+      # e antecedência (min) do aviso de compromissos.
       - BILLS_DB=/data/bills.db
       - REMINDER_HOUR=${REMINDER_HOUR:-8}
+      - REMINDER_LEAD_MIN=${REMINDER_LEAD_MIN:-15}
       # Transcrição de voz (Whisper) + lembretes em áudio (TTS), ambos via OpenAI. Vazio = voz off.
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - REMINDER_VOICE=${REMINDER_VOICE:-true}

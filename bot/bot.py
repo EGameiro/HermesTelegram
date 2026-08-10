@@ -12,6 +12,7 @@ import requests
 import weather
 import websearch
 import bills
+import reminders
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("hermes-bot")
@@ -30,15 +31,18 @@ WEATHER_ENABLED = os.environ.get("WEATHER_ENABLED", "true").lower() != "false"
 DEFAULT_CITY = os.environ.get("DEFAULT_CITY", "Jacareí")  # cidade padrão p/ previsão
 WEBSEARCH_ENABLED = os.environ.get("WEBSEARCH_ENABLED", "true").lower() != "false"
 BILLS_ENABLED = os.environ.get("BILLS_ENABLED", "true").lower() != "false"
-REMINDER_HOUR = int(os.environ.get("REMINDER_HOUR", "8"))  # hora do dia p/ enviar lembretes
+REMINDER_HOUR = int(os.environ.get("REMINDER_HOUR", "8"))  # hora do dia p/ lembrete de contas
+REMINDERS_ENABLED = os.environ.get("REMINDERS_ENABLED", "true").lower() != "false"  # compromissos c/ hora
+REMINDER_LEAD_MIN = int(os.environ.get("REMINDER_LEAD_MIN", "15"))  # antecedência do aviso (min)
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")  # p/ transcrever áudio (Whisper); vazio = voz off
 OPENAI_STT_MODEL = os.environ.get("OPENAI_STT_MODEL", "whisper-1")
 OPENAI_TTS_MODEL = os.environ.get("OPENAI_TTS_MODEL", "tts-1")  # texto->voz p/ lembretes
 OPENAI_TTS_VOICE = os.environ.get("OPENAI_TTS_VOICE", "nova")
 REMINDER_VOICE = os.environ.get("REMINDER_VOICE", "true").lower() != "false"  # lembrete em áudio
 
-# Contas aguardando confirmação do usuário: chat_id -> {"descricao","valor","vencimento"}
-pending_bill: dict[int, dict] = {}
+# Itens aguardando confirmação do usuário
+pending_bill: dict[int, dict] = {}        # {"descricao","valor","vencimento"}
+pending_reminder: dict[int, dict] = {}    # {"descricao","quando"}
 
 _AFIRMATIVO = {"sim", "s", "confirmo", "confirmar", "ok", "isso", "pode", "salvar", "salva", "👍"}
 _NEGATIVO = {"não", "nao", "n", "cancela", "cancelar", "negativo"}
@@ -144,7 +148,7 @@ def web_context(text):
 # ---------------------------------------------------------------------------
 # Contas a pagar
 # ---------------------------------------------------------------------------
-_BILL_ADD_KW = ["lembr", "conta de", "conta da", "conta do", "boleto", "fatura", "vence", "pagar"]
+_BILL_ADD_KW = ["conta de", "conta da", "conta do", "boleto", "fatura", "vence", "a pagar", "pagar"]
 _BILL_LIST_KW = [
     "minhas contas", "quais contas", "contas a pagar", "o que tenho pra pagar",
     "o que tenho para pagar", "lista de contas", "listar contas", "tenho pra pagar",
@@ -156,7 +160,124 @@ def is_bill_add(text):
     if not BILLS_ENABLED:
         return False
     low = text.lower()
-    return any(kw in low for kw in _BILL_ADD_KW) and any(ch.isdigit() for ch in low)
+    tem_dinheiro = any(kw in low for kw in _BILL_ADD_KW) or "reais" in low or "r$" in low
+    return tem_dinheiro and any(ch.isdigit() for ch in low)
+
+
+# Compromissos com hora ------------------------------------------------------
+_REMINDER_CUE = [
+    "me avise", "me avisa", "avise", "avisa", "me lembre", "me lembra", "lembrar", "lembra",
+    "reunião", "reuniao", "compromisso", "consulta", "médico", "medico", "dentista",
+    "encontro", "ligar", "chamar", "aniversário", "aniversario", "marcar", "agendar", "evento",
+]
+_DIAS_SEMANA = ["segunda", "terça", "terca", "quarta", "quinta", "sexta", "sábado", "sabado", "domingo"]
+
+
+def _tem_hora(low):
+    return bool(re.search(r"\b\d{1,2}\s*h(?:oras|rs)?\b|\b\d{1,2}:\d{2}\b|às\s+\d{1,2}|meio[- ]dia|meia[- ]noite", low))
+
+
+def _tem_dia(low):
+    if any(w in low for w in ["hoje", "amanhã", "amanha", "segunda", "terça", "terca", "quarta",
+                              "quinta", "sexta", "sábado", "sabado", "domingo", "dia "]):
+        return True
+    return bool(re.search(r"\b\d{1,2}[/-]\d{1,2}\b", low))
+
+
+def is_reminder_add(text):
+    if not REMINDERS_ENABLED:
+        return False
+    low = text.lower()
+    if not any(c in low for c in _REMINDER_CUE):
+        return False
+    return _tem_hora(low) or _tem_dia(low)
+
+
+def _normaliza_datahora(iso):
+    """datetime ISO válido no futuro (naive, hora local). None se inválido ou no passado."""
+    try:
+        dt = datetime.fromisoformat(iso)
+    except Exception:
+        return None
+    agora = datetime.now(ZoneInfo(TZ)).replace(tzinfo=None)
+    if dt < agora:
+        return None
+    return dt.strftime("%Y-%m-%dT%H:%M")
+
+
+def extract_reminder(text):
+    """Extrai {descricao, quando} de um compromisso. Retorna dict ou None."""
+    agora = datetime.now(ZoneInfo(TZ))
+    sys_prompt = (
+        f"Hoje é {agora.strftime('%Y-%m-%d')} e agora são {agora.strftime('%H:%M')} (fuso {TZ}). "
+        "Extraia da mensagem UM compromisso/lembrete. Responda APENAS um JSON, sem texto extra, "
+        'com as chaves: "descricao" (string curta do que é) e "quando" (data e hora no formato '
+        'YYYY-MM-DDTHH:MM). Se a hora não for dita, use 09:00. Use sempre o próximo horário futuro. '
+        'Exemplo: {"descricao":"Reunião com Adriana","quando":"2026-08-11T09:00"}'
+    )
+    payload = {
+        "model": OLLAMA_MODEL,
+        "messages": [
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": text},
+        ],
+        "stream": False,
+        "options": {"temperature": 0},
+    }
+    try:
+        r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=REQUEST_TIMEOUT)
+        r.raise_for_status()
+        data = json.loads(_strip_json(r.json()["message"]["content"]))
+    except Exception:
+        log.exception("Falha ao extrair compromisso")
+        return None
+    desc = (data.get("descricao") or "").strip()
+    quando = _normaliza_datahora(str(data.get("quando") or ""))
+    if not desc or not quando:
+        return None
+    return {"descricao": desc[:150], "quando": quando}
+
+
+def _fmt_datahora(iso):
+    try:
+        return datetime.fromisoformat(iso).strftime("%d/%m/%Y às %H:%M")
+    except Exception:
+        return iso
+
+
+def formatar_lista_lembretes(chat_id):
+    ls = reminders.listar(chat_id)
+    if not ls:
+        return "Você não tem lembretes agendados. 🎉"
+    linhas = ["🗓️ Seus próximos lembretes:"]
+    for l in ls:
+        linhas.append(f"#{l['id']} — {l['descricao']} — {_fmt_datahora(l['quando'])}")
+    linhas.append("\nCancelar: /cancelar <número>.")
+    return "\n".join(linhas)
+
+
+def enviar_lembretes_compromissos(agora):
+    """Avisa compromissos cujo horário está a até REMINDER_LEAD_MIN de distância. Áudio + fallback texto."""
+    try:
+        limite = (agora + timedelta(minutes=REMINDER_LEAD_MIN)).strftime("%Y-%m-%dT%H:%M")
+        for l in reminders.due(limite):
+            dt = datetime.fromisoformat(l["quando"])
+            legenda = f"🔔 Lembrete: {l['descricao']}\n🕒 {dt.strftime('%d/%m')} às {dt.strftime('%H:%M')}"
+            falado = f"Lembrete: {l['descricao']}, às {dt.strftime('%H:%M')}."
+            enviado = False
+            if REMINDER_VOICE and OPENAI_API_KEY:
+                audio = tts(falado)
+                if audio:
+                    try:
+                        send_voice(l["chat_id"], audio, caption=legenda)
+                        enviado = True
+                    except Exception:
+                        log.exception("sendVoice (compromisso) falhou; caindo p/ texto")
+            if not enviado:
+                send_message(l["chat_id"], legenda)
+            reminders.marcar_avisado(l["id"])
+    except Exception:
+        log.exception("Erro ao enviar compromissos")
 
 
 def is_bill_list(text):
@@ -366,16 +487,21 @@ def enviar_lembretes():
 
 
 def scheduler_loop():
-    """Roda em thread separada: a cada 30 min, no horário configurado, dispara os lembretes."""
-    log.info("Agendador de lembretes iniciado (hora alvo: %sh, fuso %s).", REMINDER_HOUR, TZ)
+    """Thread: a cada 60s avisa compromissos na hora; contas uma vez ao dia a partir de REMINDER_HOUR."""
+    log.info(
+        "Agendador iniciado (contas a partir de %sh; compromissos com %s min de antecedência; fuso %s).",
+        REMINDER_HOUR, REMINDER_LEAD_MIN, TZ,
+    )
     while True:
         try:
             agora = datetime.now(ZoneInfo(TZ))
-            if agora.hour >= REMINDER_HOUR:
+            if REMINDERS_ENABLED:
+                enviar_lembretes_compromissos(agora)
+            if BILLS_ENABLED and agora.hour >= REMINDER_HOUR:
                 enviar_lembretes()
         except Exception:
             log.exception("Erro no agendador")
-        time.sleep(1800)
+        time.sleep(60)
 
 
 def system_prompt_agora():
@@ -578,6 +704,23 @@ def handle(update):
         # Qualquer outra coisa: descarta o pendente e segue o fluxo normal
         pending_bill.pop(chat_id, None)
 
+    # Confirmação pendente de um compromisso
+    if chat_id in pending_reminder:
+        if cmd in _AFIRMATIVO:
+            r = pending_reminder.pop(chat_id)
+            reminders.add(chat_id, r["descricao"], r["quando"])
+            send_message(
+                chat_id,
+                f"✅ Lembrete agendado: {r['descricao']} — {_fmt_datahora(r['quando'])}.\n"
+                f"Te aviso cerca de {REMINDER_LEAD_MIN} min antes. 🔔",
+            )
+            return
+        if cmd in _NEGATIVO:
+            pending_reminder.pop(chat_id, None)
+            send_message(chat_id, "❌ Ok, não agendei.")
+            return
+        pending_reminder.pop(chat_id, None)
+
     if cmd in ("/start", "/help"):
         send_message(
             chat_id,
@@ -588,9 +731,13 @@ def handle(update):
             "/contas — lista suas contas a pagar\n"
             "/pago <nº ou nome> — marca uma conta como paga\n"
             "/remover <nº> — remove uma conta\n"
+            "/lembretes — lista seus compromissos agendados\n"
+            "/cancelar <nº> — cancela um lembrete\n"
             f"/cidade <nome> — define sua cidade p/ previsão (atual: {chat_city.get(chat_id, DEFAULT_CITY)})\n"
             "/id — mostra seu chat_id\n\n"
-            "💡 Pode falar natural ou mandar 🎤 áudio: \"me lembra da conta de luz de 100 reais dia 25/08\".",
+            "💡 Fale natural ou por 🎤 áudio:\n"
+            "• \"me lembra da conta de luz de 100 reais dia 25/08\"\n"
+            "• \"me avise amanhã às 9h da reunião com a Adriana\"",
         )
         return
     if cmd == "/reset":
@@ -651,11 +798,43 @@ def handle(update):
                 "Tente algo como: \"conta de luz, 100 reais, vence dia 25/08\".",
             )
             return
+        pending_reminder.pop(chat_id, None)
         pending_bill[chat_id] = dados
         send_message(
             chat_id,
             f"📝 Entendi:\n\n{dados['descricao']} — {_fmt_valor(dados['valor'])} — "
             f"vence {_fmt_data(dados['vencimento'])}.\n\nConfirma? Responda \"sim\" pra salvar ou \"não\" pra cancelar.",
+        )
+        return
+
+    # --- Compromissos com hora ---
+    if cmd == "/lembretes":
+        send_message(chat_id, formatar_lista_lembretes(chat_id))
+        return
+    if cmd.startswith("/cancelar"):
+        arg = text.strip()[len("/cancelar"):].strip()
+        if not arg.isdigit():
+            send_message(chat_id, "Use: /cancelar <número do lembrete>. Veja em /lembretes.")
+            return
+        ok = reminders.remover(chat_id, int(arg))
+        send_message(chat_id, "🗑️ Lembrete cancelado." if ok else "Não achei um lembrete com esse número.")
+        return
+    if is_reminder_add(text):
+        send_typing(chat_id)
+        dados = extract_reminder(text)
+        if not dados:
+            send_message(
+                chat_id,
+                "Não consegui entender o compromisso. 😕\n"
+                "Tente algo como: \"me avise amanhã às 9h da reunião com a Adriana\".",
+            )
+            return
+        pending_bill.pop(chat_id, None)
+        pending_reminder[chat_id] = dados
+        send_message(
+            chat_id,
+            f"📝 Entendi:\n\n{dados['descricao']}\n🕒 {_fmt_datahora(dados['quando'])}\n\n"
+            f"Confirma? Responda \"sim\" pra agendar ou \"não\" pra cancelar.",
         )
         return
 
@@ -678,6 +857,9 @@ def main():
     ensure_model()
     if BILLS_ENABLED:
         bills.init()
+    if REMINDERS_ENABLED:
+        reminders.init()
+    if BILLS_ENABLED or REMINDERS_ENABLED:
         threading.Thread(target=scheduler_loop, daemon=True).start()
     log.info("Bot iniciado. Long polling...")
     offset = None

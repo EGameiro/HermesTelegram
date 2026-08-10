@@ -31,6 +31,8 @@ DEFAULT_CITY = os.environ.get("DEFAULT_CITY", "Jacareí")  # cidade padrão p/ p
 WEBSEARCH_ENABLED = os.environ.get("WEBSEARCH_ENABLED", "true").lower() != "false"
 BILLS_ENABLED = os.environ.get("BILLS_ENABLED", "true").lower() != "false"
 REMINDER_HOUR = int(os.environ.get("REMINDER_HOUR", "8"))  # hora do dia p/ enviar lembretes
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")  # p/ transcrever áudio (Whisper); vazio = voz off
+OPENAI_STT_MODEL = os.environ.get("OPENAI_STT_MODEL", "whisper-1")
 
 # Contas aguardando confirmação do usuário: chat_id -> {"descricao","valor","vencimento"}
 pending_bill: dict[int, dict] = {}
@@ -326,6 +328,28 @@ def send_typing(chat_id):
         pass
 
 
+def transcrever_voz(file_id):
+    """Baixa o áudio do Telegram e transcreve via Whisper da OpenAI. Retorna texto ou None."""
+    try:
+        info = requests.get(f"{TG}/getFile", params={"file_id": file_id}, timeout=30).json()
+        file_path = info["result"]["file_path"]
+        audio = requests.get(
+            f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}", timeout=60
+        ).content
+        r = requests.post(
+            "https://api.openai.com/v1/audio/transcriptions",
+            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+            files={"file": ("audio.ogg", audio, "audio/ogg")},
+            data={"model": OPENAI_STT_MODEL, "language": "pt"},
+            timeout=120,
+        )
+        r.raise_for_status()
+        return (r.json().get("text") or "").strip()
+    except Exception:
+        log.exception("Falha ao transcrever áudio")
+        return None
+
+
 def ensure_model():
     """Espera o Ollama subir e baixa o modelo se ainda não estiver presente. Idempotente."""
     log.info("Verificando modelo %s no Ollama em %s ...", OLLAMA_MODEL, OLLAMA_URL)
@@ -380,13 +404,27 @@ def handle(update):
     if not msg:
         return
     chat_id = msg["chat"]["id"]
-    text = msg.get("text", "")
-    if not text:
-        return
 
+    # Checa acesso ANTES de qualquer processamento (não transcreve áudio de não-autorizado).
     if ALLOWED and str(chat_id) not in ALLOWED:
         log.warning("Chat não autorizado: %s", chat_id)
         send_message(chat_id, f"Acesso não autorizado. Seu chat_id é: {chat_id}")
+        return
+
+    text = msg.get("text", "")
+    if not text:
+        voz = msg.get("voice") or msg.get("audio")
+        if voz:
+            if not OPENAI_API_KEY:
+                send_message(chat_id, "Recebi um áudio, mas a transcrição de voz não está configurada. 🙊")
+                return
+            send_typing(chat_id)
+            text = transcrever_voz(voz["file_id"]) or ""
+            if not text:
+                send_message(chat_id, "⚠️ Não consegui entender o áudio. Pode repetir ou escrever?")
+                return
+            send_message(chat_id, f"🎤 Entendi: \"{text}\"")
+    if not text:
         return
 
     cmd = text.strip().lower()
@@ -421,7 +459,7 @@ def handle(update):
             "/remover <nº> — remove uma conta\n"
             f"/cidade <nome> — define sua cidade p/ previsão (atual: {chat_city.get(chat_id, DEFAULT_CITY)})\n"
             "/id — mostra seu chat_id\n\n"
-            "💡 Pode falar natural: \"me lembra da conta de luz de 100 reais dia 25/08\".",
+            "💡 Pode falar natural ou mandar 🎤 áudio: \"me lembra da conta de luz de 100 reais dia 25/08\".",
         )
         return
     if cmd == "/reset":

@@ -48,6 +48,17 @@ def listar(chat_id):
         return [dict(r) for r in rows]
 
 
+def listar_periodo(chat_id, ini_date_iso, fim_date_iso):
+    """Compromissos não avisados cuja DATA está entre ini e fim (inclusive)."""
+    with _conn() as con:
+        rows = con.execute(
+            "SELECT * FROM lembretes WHERE chat_id=? AND avisado=0 AND quando BETWEEN ? AND ? "
+            "ORDER BY quando",
+            (chat_id, f"{ini_date_iso}T00:00", f"{fim_date_iso}T23:59"),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
 def remover(chat_id, lid):
     with _conn() as con:
         cur = con.execute("DELETE FROM lembretes WHERE id=? AND chat_id=?", (lid, chat_id))

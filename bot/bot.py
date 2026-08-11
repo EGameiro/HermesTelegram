@@ -184,10 +184,29 @@ def _tem_dia(low):
     return bool(re.search(r"\b\d{1,2}[/-]\d{1,2}\b", low))
 
 
+_REMINDER_NOUN = ["compromisso", "lembrete", "agenda"]
+_QUERY_WORD = ["quais", "qual", "o que", "que ", "quantos", "mostra", "mostrar", "lista",
+               "listar", "ver ", "tem algum", "tenho algum", "meus", "minha", "quero ver"]
+
+
+def is_reminder_list(text):
+    """Consulta de compromissos (listar), não cadastro."""
+    if not REMINDERS_ENABLED:
+        return False
+    low = text.lower()
+    if not any(n in low for n in _REMINDER_NOUN):
+        return False
+    if _tem_hora(low):  # tem hora específica -> é cadastro, não consulta
+        return False
+    return any(q in low for q in _QUERY_WORD) or low.strip().endswith("?")
+
+
 def is_reminder_add(text):
     if not REMINDERS_ENABLED:
         return False
     low = text.lower()
+    if is_reminder_list(text):  # consulta tem prioridade sobre cadastro
+        return False
     if not any(c in low for c in _REMINDER_CUE):
         return False
     return _tem_hora(low) or _tem_dia(low)
@@ -245,11 +264,17 @@ def _fmt_datahora(iso):
         return iso
 
 
-def formatar_lista_lembretes(chat_id):
-    ls = reminders.listar(chat_id)
+def formatar_lista_lembretes(chat_id, text=None):
+    label, ini, fim = _periodo(text) if text else (None, None, None)
+    if ini:
+        ls = reminders.listar_periodo(chat_id, ini, fim)
+        titulo, vazio = f"🗓️ Seus compromissos {label}:", f"Você não tem compromissos {label}. 🎉"
+    else:
+        ls = reminders.listar(chat_id)
+        titulo, vazio = "🗓️ Seus próximos compromissos:", "Você não tem compromissos agendados. 🎉"
     if not ls:
-        return "Você não tem lembretes agendados. 🎉"
-    linhas = ["🗓️ Seus próximos lembretes:"]
+        return vazio
+    linhas = [titulo]
     for l in ls:
         linhas.append(f"#{l['id']} — {l['descricao']} — {_fmt_datahora(l['quando'])}")
     linhas.append("\nCancelar: /cancelar <número>.")
@@ -827,6 +852,9 @@ def handle(update):
             return
         ok = reminders.remover(chat_id, int(arg))
         send_message(chat_id, "🗑️ Lembrete cancelado." if ok else "Não achei um lembrete com esse número.")
+        return
+    if is_reminder_list(text):
+        send_message(chat_id, formatar_lista_lembretes(chat_id, text))
         return
     if is_reminder_add(text):
         send_typing(chat_id)

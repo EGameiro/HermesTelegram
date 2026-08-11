@@ -297,7 +297,7 @@ def is_bill_list(text):
 def _periodo(text):
     """Extrai o período da pergunta. Retorna (label, ini_iso, fim_iso); (None,None,None) = todas."""
     low = text.lower()
-    hoje = date.today()
+    hoje = hoje_local()
 
     m = re.search(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b", low)
     if m:
@@ -377,7 +377,7 @@ def _normaliza_venc(iso):
         d = date.fromisoformat(iso)
     except Exception:
         return None
-    hoje = date.today()
+    hoje = hoje_local()
     if d < hoje:
         try:
             d = d.replace(year=hoje.year + 1) if d.year <= hoje.year else d
@@ -390,7 +390,7 @@ def _normaliza_venc(iso):
 
 def extract_bill(text):
     """Usa o modelo p/ extrair {descricao, valor, vencimento} da mensagem. Retorna dict ou None."""
-    hoje = date.today().isoformat()
+    hoje = hoje_local().isoformat()
     sys_prompt = (
         f"Hoje é {hoje}. Extraia da mensagem do usuário os dados de UMA conta a pagar. "
         "Responda APENAS um objeto JSON, sem texto extra, com as chaves: "
@@ -456,7 +456,7 @@ def _valor_falado(v):
 def enviar_lembretes():
     """Chamado pelo agendador: avisa contas vencendo (uma vez por conta). Áudio com fallback p/ texto."""
     try:
-        hoje_iso = date.today().isoformat()
+        hoje_iso = hoje_local().isoformat()
         for c in bills.vencendo(hoje_iso):
             venc = _fmt_data(c["vencimento"])
             hoje = c["vencimento"] == hoje_iso
@@ -502,6 +502,15 @@ def scheduler_loop():
         except Exception:
             log.exception("Erro no agendador")
         time.sleep(60)
+
+
+def agora_local():
+    """Data/hora atual no fuso configurado. NUNCA usar date.today()/datetime.now() (dão UTC no container)."""
+    return datetime.now(ZoneInfo(TZ))
+
+
+def hoje_local():
+    return agora_local().date()
 
 
 def system_prompt_agora():

@@ -22,6 +22,10 @@ services:
       - OLLAMA_URL=http://ollama:11434
       # Troque p/ hermes3:8b no Environment do Dokploy (OLLAMA_MODEL=hermes3:8b) p/ testar o modelo maior.
       - OLLAMA_MODEL=${OLLAMA_MODEL:-hermes3:3b}
+      # Cérebro: "ollama" (local) ou "groq" (nuvem rápida). Se groq, defina GROQ_API_KEY.
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
       - SYSTEM_PROMPT=Você é o Hermes, um assistente útil e direto. Responda em português do Brasil.
       # Previsão do tempo real (Open-Meteo, sem API key). Cidade padrão e liga/desliga.
       - DEFAULT_CITY=${DEFAULT_CITY:-Jacareí}

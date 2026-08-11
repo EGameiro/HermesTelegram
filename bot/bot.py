@@ -20,6 +20,11 @@ log = logging.getLogger("hermes-bot")
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://ollama:11434").rstrip("/")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "hermes3:3b")
+# Provedor do "cérebro": "ollama" (local, na VPS) ou "groq" (nuvem, rápido).
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama").lower()
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 SYSTEM_PROMPT = os.environ.get(
     "SYSTEM_PROMPT",
     "Você é o Hermes, um assistente útil e direto. Responda em português do Brasil.",
@@ -234,19 +239,11 @@ def extract_reminder(text):
         'YYYY-MM-DDTHH:MM). Se a hora não for dita, use 09:00. Use sempre o próximo horário futuro. '
         'Exemplo: {"descricao":"Reunião com Adriana","quando":"2026-08-11T09:00"}'
     )
-    payload = {
-        "model": OLLAMA_MODEL,
-        "messages": [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": text},
-        ],
-        "stream": False,
-        "options": {"temperature": 0},
-    }
     try:
-        r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=REQUEST_TIMEOUT)
-        r.raise_for_status()
-        data = json.loads(_strip_json(r.json()["message"]["content"]))
+        data = json.loads(_strip_json(llm_chat(
+            [{"role": "system", "content": sys_prompt}, {"role": "user", "content": text}],
+            temperature=0,
+        )))
     except Exception:
         log.exception("Falha ao extrair compromisso")
         return None
@@ -423,19 +420,11 @@ def extract_bill(text):
         '"vencimento" (data no formato YYYY-MM-DD; se o ano não for dito, use o próximo vencimento futuro; ou null). '
         'Exemplo: {"descricao":"Luz","valor":100.0,"vencimento":"2026-08-25"}'
     )
-    payload = {
-        "model": OLLAMA_MODEL,
-        "messages": [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": text},
-        ],
-        "stream": False,
-        "options": {"temperature": 0},
-    }
     try:
-        r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=REQUEST_TIMEOUT)
-        r.raise_for_status()
-        raw = _strip_json(r.json()["message"]["content"])
+        raw = _strip_json(llm_chat(
+            [{"role": "system", "content": sys_prompt}, {"role": "user", "content": text}],
+            temperature=0,
+        ))
         data = json.loads(raw)
     except Exception:
         log.exception("Falha ao extrair conta")
@@ -671,6 +660,30 @@ def ensure_model():
     log.info("Download concluído.")
 
 
+def llm_chat(messages, temperature=None):
+    """Chama o provedor de LLM ativo (Ollama local ou Groq) e devolve o TEXTO da resposta."""
+    if LLM_PROVIDER == "groq":
+        payload = {"model": GROQ_MODEL, "messages": messages, "stream": False}
+        if temperature is not None:
+            payload["temperature"] = temperature
+        r = requests.post(
+            GROQ_URL,
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+            json=payload,
+            timeout=REQUEST_TIMEOUT,
+        )
+        r.raise_for_status()
+        return r.json()["choices"][0]["message"]["content"]
+
+    # ollama (padrão)
+    payload = {"model": OLLAMA_MODEL, "messages": messages, "stream": False}
+    if temperature is not None:
+        payload["options"] = {"temperature": temperature}
+    r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=REQUEST_TIMEOUT)
+    r.raise_for_status()
+    return r.json()["message"]["content"]
+
+
 def ask_hermes(chat_id, user_text, extra_context=None):
     msgs = [{"role": "system", "content": system_prompt_agora()}]
     if extra_context:
@@ -678,10 +691,7 @@ def ask_hermes(chat_id, user_text, extra_context=None):
     msgs += history.get(chat_id, [])
     msgs.append({"role": "user", "content": user_text})
 
-    payload = {"model": OLLAMA_MODEL, "messages": msgs, "stream": False}
-    r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=REQUEST_TIMEOUT)
-    r.raise_for_status()
-    reply = r.json()["message"]["content"].strip()
+    reply = llm_chat(msgs).strip()
 
     h = history.get(chat_id, [])
     h.append({"role": "user", "content": user_text})
@@ -891,7 +901,11 @@ def handle(update):
 
 
 def main():
-    ensure_model()
+    if LLM_PROVIDER == "groq":
+        log.info("Cérebro: GROQ (nuvem), modelo %s.", GROQ_MODEL)
+    else:
+        log.info("Cérebro: OLLAMA (local), modelo %s.", OLLAMA_MODEL)
+        ensure_model()
     if BILLS_ENABLED:
         bills.init()
     if REMINDERS_ENABLED:

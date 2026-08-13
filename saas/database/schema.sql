@@ -3,6 +3,8 @@
 -- Contrato compartilhado entre o bot (Python) e o painel (.NET/EF Core).
 -- Convenção: cada USUÁRIO é um TENANT. Toda tabela de domínio tem UsuarioId.
 -- Charset utf8mb4 (emoji/acentos), engine InnoDB (FKs).
+-- NOTA: todas as tabelas têm o prefixo "01". Como o nome começa com dígito,
+--       é obrigatório usar crase (`01Nome`) em todas as referências.
 -- ============================================================================
 -- Para criar do zero:  mysql -u <user> -p < schema.sql
 -- ----------------------------------------------------------------------------
@@ -14,7 +16,7 @@ USE hermes_saas;
 -- ----------------------------------------------------------------------------
 -- 1) Usuários / Contas (o TENANT)
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS Usuarios (
+CREATE TABLE IF NOT EXISTS `01Usuarios` (
   Id               BIGINT       NOT NULL AUTO_INCREMENT,
   NomeCompleto     VARCHAR(200) NOT NULL,
   Email            VARCHAR(200) NOT NULL,
@@ -28,13 +30,13 @@ CREATE TABLE IF NOT EXISTS Usuarios (
   CriadoEm         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   AtualizadoEm     DATETIME     NULL,
   PRIMARY KEY (Id),
-  UNIQUE KEY UX_Usuarios_Email (Email)
+  UNIQUE KEY UX_01Usuarios_Email (Email)
 ) ENGINE=InnoDB;
 
 -- ----------------------------------------------------------------------------
 -- 2) Vínculo com o Telegram (Modelo A: guarda o ID; Modelo B: guarda BotToken)
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS TelegramVinculos (
+CREATE TABLE IF NOT EXISTS `01TelegramVinculos` (
   Id               BIGINT       NOT NULL AUTO_INCREMENT,
   UsuarioId        BIGINT       NOT NULL,
   TelegramUserId   BIGINT       NULL,               -- chat_id (identidade). Null até vincular.
@@ -45,17 +47,17 @@ CREATE TABLE IF NOT EXISTS TelegramVinculos (
   DataVinculo      DATETIME     NULL,
   BotToken         VARCHAR(255) NULL,               -- SÓ Modelo B (guardar cifrado)
   PRIMARY KEY (Id),
-  UNIQUE KEY UX_Telegram_UserId (TelegramUserId),   -- um chat_id -> uma conta
-  KEY IX_Telegram_Token (TokenVinculo),
-  KEY IX_Telegram_Usuario (UsuarioId),
-  CONSTRAINT FK_Telegram_Usuario FOREIGN KEY (UsuarioId)
-    REFERENCES Usuarios(Id) ON DELETE CASCADE
+  UNIQUE KEY UX_01Telegram_UserId (TelegramUserId), -- um chat_id -> uma conta
+  KEY IX_01Telegram_Token (TokenVinculo),
+  KEY IX_01Telegram_Usuario (UsuarioId),
+  CONSTRAINT FK_01Telegram_Usuario FOREIGN KEY (UsuarioId)
+    REFERENCES `01Usuarios`(Id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ----------------------------------------------------------------------------
 -- 3) Catálogo de Planos (referência) + limites por plano
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS Planos (
+CREATE TABLE IF NOT EXISTS `01Planos` (
   Id              INT          NOT NULL AUTO_INCREMENT,
   Codigo          VARCHAR(20)  NOT NULL,            -- free|pro|business
   Nome            VARCHAR(50)  NOT NULL,
@@ -64,13 +66,13 @@ CREATE TABLE IF NOT EXISTS Planos (
   LimiteVozSegMes INT          NULL,                -- cota de voz em segundos (null = ilimitado)
   Ativo           TINYINT(1)   NOT NULL DEFAULT 1,
   PRIMARY KEY (Id),
-  UNIQUE KEY UX_Planos_Codigo (Codigo)
+  UNIQUE KEY UX_01Planos_Codigo (Codigo)
 ) ENGINE=InnoDB;
 
 -- ----------------------------------------------------------------------------
 -- 4) Assinatura (plano atual do usuário)
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS Assinaturas (
+CREATE TABLE IF NOT EXISTS `01Assinaturas` (
   Id                  BIGINT      NOT NULL AUTO_INCREMENT,
   UsuarioId           BIGINT      NOT NULL,
   PlanoId             INT         NOT NULL,
@@ -82,17 +84,17 @@ CREATE TABLE IF NOT EXISTS Assinaturas (
   GatewayAssinaturaId VARCHAR(100) NULL,                    -- futuro (gateway)
   CriadoEm            DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (Id),
-  KEY IX_Assinaturas_Usuario (UsuarioId),
-  CONSTRAINT FK_Assinatura_Usuario FOREIGN KEY (UsuarioId)
-    REFERENCES Usuarios(Id) ON DELETE CASCADE,
-  CONSTRAINT FK_Assinatura_Plano FOREIGN KEY (PlanoId)
-    REFERENCES Planos(Id)
+  KEY IX_01Assinaturas_Usuario (UsuarioId),
+  CONSTRAINT FK_01Assinatura_Usuario FOREIGN KEY (UsuarioId)
+    REFERENCES `01Usuarios`(Id) ON DELETE CASCADE,
+  CONSTRAINT FK_01Assinatura_Plano FOREIGN KEY (PlanoId)
+    REFERENCES `01Planos`(Id)
 ) ENGINE=InnoDB;
 
 -- ----------------------------------------------------------------------------
 -- 5) Pagamentos / Faturas (registro manual na fase de teste)
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS Pagamentos (
+CREATE TABLE IF NOT EXISTS `01Pagamentos` (
   Id                 BIGINT       NOT NULL AUTO_INCREMENT,
   UsuarioId          BIGINT       NOT NULL,
   Valor              DECIMAL(10,2) NOT NULL,
@@ -103,15 +105,15 @@ CREATE TABLE IF NOT EXISTS Pagamentos (
   Observacoes        VARCHAR(255) NULL,
   CriadoEm           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (Id),
-  KEY IX_Pagamentos_Usuario (UsuarioId),
-  CONSTRAINT FK_Pagamento_Usuario FOREIGN KEY (UsuarioId)
-    REFERENCES Usuarios(Id) ON DELETE CASCADE
+  KEY IX_01Pagamentos_Usuario (UsuarioId),
+  CONSTRAINT FK_01Pagamento_Usuario FOREIGN KEY (UsuarioId)
+    REFERENCES `01Usuarios`(Id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ----------------------------------------------------------------------------
 -- 6) Medição de uso (por usuário, por mês) — base de custo e limites (fair-use)
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS UsoMensal (
+CREATE TABLE IF NOT EXISTS `01UsoMensal` (
   Id             BIGINT   NOT NULL AUTO_INCREMENT,
   UsuarioId      BIGINT   NOT NULL,
   Ano            SMALLINT NOT NULL,
@@ -122,15 +124,15 @@ CREATE TABLE IF NOT EXISTS UsoMensal (
   QtdMensagens   INT      NOT NULL DEFAULT 0,
   CustoEstimado  DECIMAL(10,4) NOT NULL DEFAULT 0,
   PRIMARY KEY (Id),
-  UNIQUE KEY UX_Uso_Usuario_Mes (UsuarioId, Ano, Mes),
-  CONSTRAINT FK_Uso_Usuario FOREIGN KEY (UsuarioId)
-    REFERENCES Usuarios(Id) ON DELETE CASCADE
+  UNIQUE KEY UX_01Uso_Usuario_Mes (UsuarioId, Ano, Mes),
+  CONSTRAINT FK_01Uso_Usuario FOREIGN KEY (UsuarioId)
+    REFERENCES `01Usuarios`(Id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ----------------------------------------------------------------------------
 -- 7) Configurações do assistente (1:1 com o usuário)
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS Configuracoes (
+CREATE TABLE IF NOT EXISTS `01Configuracoes` (
   UsuarioId       BIGINT      NOT NULL,
   Cidade          VARCHAR(100) NOT NULL DEFAULT 'Jacareí',
   VozAtiva        TINYINT(1)  NOT NULL DEFAULT 1,
@@ -139,14 +141,14 @@ CREATE TABLE IF NOT EXISTS Configuracoes (
   Pin             VARCHAR(10) NULL,
   Fuso            VARCHAR(50) NOT NULL DEFAULT 'America/Sao_Paulo',
   PRIMARY KEY (UsuarioId),
-  CONSTRAINT FK_Config_Usuario FOREIGN KEY (UsuarioId)
-    REFERENCES Usuarios(Id) ON DELETE CASCADE
+  CONSTRAINT FK_01Config_Usuario FOREIGN KEY (UsuarioId)
+    REFERENCES `01Usuarios`(Id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ----------------------------------------------------------------------------
 -- 8) Contas a pagar (domínio do assistente) — agora com UsuarioId
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS ContasPagar (
+CREATE TABLE IF NOT EXISTS `01ContasPagar` (
   Id               BIGINT       NOT NULL AUTO_INCREMENT,
   UsuarioId        BIGINT       NOT NULL,
   Descricao        VARCHAR(200) NOT NULL,
@@ -156,15 +158,15 @@ CREATE TABLE IF NOT EXISTS ContasPagar (
   LembreteEnviado  TINYINT(1)   NOT NULL DEFAULT 0,
   CriadoEm         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (Id),
-  KEY IX_Contas_Usuario_Venc (UsuarioId, Vencimento),
-  CONSTRAINT FK_Conta_Usuario FOREIGN KEY (UsuarioId)
-    REFERENCES Usuarios(Id) ON DELETE CASCADE
+  KEY IX_01Contas_Usuario_Venc (UsuarioId, Vencimento),
+  CONSTRAINT FK_01Conta_Usuario FOREIGN KEY (UsuarioId)
+    REFERENCES `01Usuarios`(Id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ----------------------------------------------------------------------------
 -- 9) Compromissos com hora (lembretes) — agora com UsuarioId
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS Compromissos (
+CREATE TABLE IF NOT EXISTS `01Compromissos` (
   Id          BIGINT       NOT NULL AUTO_INCREMENT,
   UsuarioId   BIGINT       NOT NULL,
   Descricao   VARCHAR(200) NOT NULL,
@@ -172,30 +174,30 @@ CREATE TABLE IF NOT EXISTS Compromissos (
   Avisado     TINYINT(1)   NOT NULL DEFAULT 0,
   CriadoEm    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (Id),
-  KEY IX_Compromissos_Usuario_Quando (UsuarioId, Quando),
-  CONSTRAINT FK_Compromisso_Usuario FOREIGN KEY (UsuarioId)
-    REFERENCES Usuarios(Id) ON DELETE CASCADE
+  KEY IX_01Compromissos_Usuario_Quando (UsuarioId, Quando),
+  CONSTRAINT FK_01Compromisso_Usuario FOREIGN KEY (UsuarioId)
+    REFERENCES `01Usuarios`(Id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ----------------------------------------------------------------------------
 -- 10) Histórico de conversa (curto, por usuário) — opcional; pode migrar p/ Redis
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS HistoricoConversa (
+CREATE TABLE IF NOT EXISTS `01HistoricoConversa` (
   Id         BIGINT      NOT NULL AUTO_INCREMENT,
   UsuarioId  BIGINT      NOT NULL,
   Papel      VARCHAR(20) NOT NULL,                  -- user|assistant|system
   Conteudo   TEXT        NOT NULL,
   CriadoEm   DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (Id),
-  KEY IX_Historico_Usuario (UsuarioId, CriadoEm),
-  CONSTRAINT FK_Historico_Usuario FOREIGN KEY (UsuarioId)
-    REFERENCES Usuarios(Id) ON DELETE CASCADE
+  KEY IX_01Historico_Usuario (UsuarioId, CriadoEm),
+  CONSTRAINT FK_01Historico_Usuario FOREIGN KEY (UsuarioId)
+    REFERENCES `01Usuarios`(Id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ============================================================================
 -- SEED: planos padrão (preços definidos; voz grátis = 10 min = 600 s)
 -- ============================================================================
-INSERT INTO Planos (Codigo, Nome, PrecoMensal, LimiteMsgsDia, LimiteVozSegMes, Ativo)
+INSERT INTO `01Planos` (Codigo, Nome, PrecoMensal, LimiteMsgsDia, LimiteVozSegMes, Ativo)
 VALUES
   ('free',     'Grátis',   0.00, 30,   600,  1),   -- 10 min de voz/mês
   ('pro',      'Pro',     24.99, NULL, NULL, 1),   -- volume alto (fair-use no app)

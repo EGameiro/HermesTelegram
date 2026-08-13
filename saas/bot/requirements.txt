@@ -2,3 +2,4 @@ requests==2.32.3
 tzdata==2025.2
 ddgs==9.14.4
 PyMySQL==1.1.1
+DBUtils==3.1.0

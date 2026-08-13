@@ -10,12 +10,33 @@ import os
 import re
 import json
 import time
+import socket
 import logging
 import threading
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 
 import requests
+
+# --- Força IPv4 ---------------------------------------------------------------
+# Em máquinas com IPv6 quebrado, cada conexão NOVA tenta o IPv6 primeiro e trava
+# ~21s no timeout do SYN (3+6+12s no Windows) antes de cair pro IPv4 — o que fazia
+# cada chamada ao Telegram levar ~22s. Filtrando o getaddrinfo para IPv4 (quando
+# existir) o handshake volta ao normal. Seguro: se não houver IPv4, mantém a lista
+# original (ambientes IPv6-only seguem funcionando). Desligue com FORCE_IPV4=0.
+if os.environ.get("FORCE_IPV4", "1").lower() not in ("0", "false", "no"):
+    _orig_getaddrinfo = socket.getaddrinfo
+
+    def _getaddrinfo_ipv4(*args, **kwargs):
+        res = _orig_getaddrinfo(*args, **kwargs)
+        v4 = [r for r in res if r[0] == socket.AF_INET]
+        return v4 or res
+
+    socket.getaddrinfo = _getaddrinfo_ipv4
+
+# Sessão HTTP reutilizável (keep-alive): evita refazer o handshake TLS a cada
+# chamada ao Telegram — economiza uma ida-e-volta por mensagem.
+SESSION = requests.Session()
 
 import weather
 import websearch
@@ -52,6 +73,7 @@ OPENAI_STT_MODEL = os.environ.get("OPENAI_STT_MODEL", "whisper-1")
 OPENAI_TTS_MODEL = os.environ.get("OPENAI_TTS_MODEL", "tts-1")  # texto->voz p/ lembretes
 OPENAI_TTS_VOICE = os.environ.get("OPENAI_TTS_VOICE", "nova")
 REMINDER_VOICE = os.environ.get("REMINDER_VOICE", "true").lower() != "false"  # lembrete em áudio
+TIMING = os.environ.get("HERMES_TIMING", "").lower() in ("1", "true", "yes")  # loga tempo por etapa
 
 # Estado em memória, agora escopado por UsuarioId (o tenant), não pelo chat do Telegram.
 pending_bill: dict[int, dict] = {}        # {"descricao","valor","vencimento"}
@@ -566,8 +588,11 @@ TG = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
 
 def tg(method, **params):
-    r = requests.post(f"{TG}/{method}", json=params, timeout=60)
+    t0 = time.perf_counter()
+    r = SESSION.post(f"{TG}/{method}", json=params, timeout=60)
     r.raise_for_status()
+    if TIMING:
+        log.info("[t] TG %s: %.0f ms", method, (time.perf_counter() - t0) * 1000)
     return r.json()
 
 
@@ -587,9 +612,9 @@ def send_typing(chat_id):
 def transcrever_voz(file_id):
     """Baixa o áudio do Telegram e transcreve via Whisper da OpenAI. Retorna texto ou None."""
     try:
-        info = requests.get(f"{TG}/getFile", params={"file_id": file_id}, timeout=30).json()
+        info = SESSION.get(f"{TG}/getFile", params={"file_id": file_id}, timeout=30).json()
         file_path = info["result"]["file_path"]
-        audio = requests.get(
+        audio = SESSION.get(
             f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}", timeout=60
         ).content
         r = requests.post(
@@ -631,7 +656,7 @@ def send_voice(chat_id, audio_bytes, caption=None):
     data = {"chat_id": chat_id}
     if caption:
         data["caption"] = caption[:1000]
-    r = requests.post(
+    r = SESSION.post(
         f"{TG}/sendVoice",
         data=data,
         files={"voice": ("lembrete.ogg", audio_bytes, "audio/ogg")},
@@ -673,6 +698,7 @@ def ensure_model():
 def llm_chat(messages, temperature=None, usuario_id=None):
     """Chama o provedor de LLM ativo (Ollama local ou Groq), devolve o TEXTO e — se
     usuario_id for passado — mede os tokens consumidos em H01UsoMensal."""
+    t0 = time.perf_counter()
     if LLM_PROVIDER == "groq":
         payload = {"model": GROQ_MODEL, "messages": messages, "stream": False}
         if temperature is not None:
@@ -697,6 +723,8 @@ def llm_chat(messages, temperature=None, usuario_id=None):
         texto = data["message"]["content"]
         tokens = int(data.get("prompt_eval_count", 0) or 0) + int(data.get("eval_count", 0) or 0)
 
+    if TIMING:
+        log.info("[t] LLM %s: %.0f ms, %d tokens", LLM_PROVIDER, (time.perf_counter() - t0) * 1000, tokens)
     if usuario_id and tokens:
         usage.registrar(usuario_id, tokens=tokens)
     return texto
@@ -968,7 +996,7 @@ def main():
     offset = None
     while True:
         try:
-            resp = requests.get(
+            resp = SESSION.get(
                 f"{TG}/getUpdates",
                 params={"timeout": 30, "offset": offset},
                 timeout=40,
@@ -980,10 +1008,13 @@ def main():
 
         for update in resp.get("result", []):
             offset = update["update_id"] + 1
+            t0 = time.perf_counter()
             try:
                 handle(update)
             except Exception:
                 log.exception("Erro ao tratar update")
+            if TIMING:
+                log.info("[t] update total: %.0f ms", (time.perf_counter() - t0) * 1000)
 
 
 if __name__ == "__main__":

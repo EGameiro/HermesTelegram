@@ -20,7 +20,12 @@ saas/
 │   └── bot.py            ← long polling, roteamento, comandos, agendador multi-tenant
 ├── docker-compose.yml    ← stack SaaS (bot + Ollama; MySQL é externo)
 ├── .env.example          ← variáveis (Telegram, MySQL, LLM, voz)
-└── web/                  ← (a fazer) painel ASP.NET Core Razor
+└── web/                  ← painel ASP.NET Core Razor (Etapa 3 — em construção)
+    ├── Data/             ← AppUser, AppDbContext (H01* ExcludeFromMigrations), entidades,
+    │                        CustomClaimsFactory, DatabaseSeeder, Migrations (só AspNet*)
+    ├── Services/         ← OnboardingService (cadastro + token de vínculo), BrTime
+    └── Pages/            ← Login, Cadastro, Dashboard, Telegram/Conectar,
+                             Conta/Configuracoes, Admin/Clientes
 ```
 
 ## Decisões (da especificação)
@@ -48,10 +53,43 @@ mysql -u <user> -p < database/schema.sql
 2. ✅ **Refatorar o bot p/ multi-tenant** (`bot/`) — feito. Ao receber mensagem, resolve o
    tenant por `TelegramUserId`; escopa contas/compromissos/config por `UsuarioId`; mede uso
    (tokens/voz/TTS/mensagens) em `H01UsoMensal`; aplica o **limite de voz** do plano.
-3. ⬜ **Painel web (.NET)**: cadastro/login (Identity), onboarding com **token de vínculo**
-   do Telegram, ativação manual de plano (admin), dados/plano/config do cliente.
+3. 🚧 **Painel web (.NET)** (`web/`) — fundação pronta: login/cadastro (Identity), multi-tenancy
+   por `UsuarioId` (claim + `HasQueryFilter`, padrão FaceRenew), onboarding com **token de
+   vínculo**, dashboard (plano + uso do mês), conexão do Telegram, configurações, e
+   **ativação manual de plano** pelo admin. Falta: "Meus dados" (contas/compromissos pela
+   web), faturas, conta (trocar senha/cancelar/LGPD), reset de senha por e-mail.
 4. ⬜ **Fluxo de onboarding ponta a ponta**: site gera token → usuário faz `/start <token>`
    no bot → vínculo criado → bot passa a atender.
+
+## Painel web (.NET) — como funciona e rodar
+
+**Arquitetura de auth/tenant:** o ASP.NET Identity (`AspNetUsers`) cuida do login; cada
+`AppUser` aponta para um tenant `H01Usuarios` via `UsuarioId`. As tabelas `H01*` são o
+contrato compartilhado com o bot, então o EF as mapeia com **`ExcludeFromMigrations`** (não as
+cria nem altera) — a única migration do EF cria apenas as tabelas `AspNet*`. O `schema.sql`
+continua sendo a fonte da verdade do domínio.
+
+**Multi-tenancy:** após o login, a `CustomClaimsFactory` injeta o claim `UsuarioId`; o
+`AppDbContext` lê esse claim e aplica `HasQueryFilter` por `UsuarioId` em todas as tabelas de
+domínio — isolamento automático, igual ao `ClinicaId` do FaceRenew. O admin usa
+`IgnoreQueryFilters()` para ver todos os clientes.
+
+**Cadastro (onboarding):** `OnboardingService.RegistrarAsync` cria, numa transação,
+`H01Usuarios` (trial) + `H01Configuracoes` + `H01Assinaturas` (plano free, 14 dias) + o
+`AppUser` (role `Cliente`). Em seguida o usuário gera um **token de vínculo** (curto, 30 min) e
+o envia como `/start <token>` ao bot — fechando o ciclo com a Etapa 2.
+
+**Rodar (dev):**
+```bash
+cd saas/web
+# 1) aplicar o schema num MySQL 8 (uma vez): mysql -u <user> -p < ../database/schema.sql
+# 2) ajustar ConnectionStrings:DefaultConnection no appsettings.json (ou env)
+dotnet run
+```
+O `DatabaseSeeder` aplica a migration do Identity no startup e cria as roles + o admin
+(`AdminSeed` no appsettings; padrão `admin@hermes.local` / `Admin@123` — trocar em produção).
+Env de produção: `ConnectionStrings__DefaultConnection`, `AdminSeed__Senha`,
+`Telegram__BotUsername`.
 
 ## Como o bot multi-tenant funciona (Etapa 2)
 

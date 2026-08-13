@@ -8,9 +8,9 @@
 -- Para criar do zero:  mysql -u <user> -p < schema.sql
 -- ----------------------------------------------------------------------------
 
-CREATE DATABASE IF NOT EXISTS hermes_saas
-  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE hermes_saas;
+-- CREATE DATABASE IF NOT EXISTS hermes_saas
+--   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- USE hermes_saas;
 
 -- ----------------------------------------------------------------------------
 -- 1) Usuários / Contas (o TENANT)

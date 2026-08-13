@@ -1,0 +1,92 @@
+@page
+@model HermesSaaS.Web.Pages.DashboardModel
+@{
+    ViewData["Title"] = "Painel";
+    string MinSeg(int s) => $"{s / 60} min {s % 60}s";
+    var vozPct = Model.VozLimiteSeg is int lim && lim > 0
+        ? Math.Min(100, (int)(100.0 * Model.VozUsadaSeg / lim)) : 0;
+}
+<h4 class="mb-4">Olá, @User.FindFirst("NomeCompleto")?.Value 👋</h4>
+
+@if (!Model.Conectado)
+{
+    <div class="alert alert-warning d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-exclamation-triangle me-1"></i> Seu Telegram ainda não está conectado — o assistente só funciona depois de conectar.</span>
+        <a asp-page="/Telegram/Conectar" class="btn btn-sm btn-hermes">Conectar agora</a>
+    </div>
+}
+
+<div class="row g-3">
+    <div class="col-12 col-lg-6">
+        <div class="card p-3 h-100">
+            <h6 class="text-muted text-uppercase small">Plano</h6>
+            <div class="d-flex align-items-baseline gap-2">
+                <span class="h4 mb-0">@(Model.Plano?.Nome ?? "—")</span>
+                <span class="badge bg-secondary">@(Model.Assinatura?.Status ?? "—")</span>
+            </div>
+            @if (Model.Assinatura?.Status == "trial" && Model.Assinatura.TrialAte is DateOnly ate)
+            {
+                <p class="text-muted small mb-0 mt-2">Teste grátis até <strong>@ate.ToString("dd/MM/yyyy")</strong>.</p>
+            }
+            @if ((Model.Plano?.PrecoMensal ?? 0) > 0)
+            {
+                <p class="text-muted small mb-0 mt-1">Mensalidade: R$ @Model.Plano!.PrecoMensal.ToString("N2")</p>
+            }
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card p-3 h-100">
+            <h6 class="text-muted text-uppercase small">Conexão Telegram</h6>
+            @if (Model.Conectado)
+            {
+                <span class="h5 text-success mb-0"><i class="bi bi-check-circle-fill"></i> Conectado</span>
+                @if (!string.IsNullOrEmpty(Model.Vinculo?.TelegramUsername))
+                {
+                    <p class="text-muted small mb-0 mt-2">@@@Model.Vinculo!.TelegramUsername</p>
+                }
+            }
+            else
+            {
+                <span class="h5 text-warning mb-0"><i class="bi bi-dash-circle"></i> Pendente</span>
+                <a asp-page="/Telegram/Conectar" class="small mt-2 text-hermes">Conectar →</a>
+            }
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card p-3">
+            <h6 class="text-muted text-uppercase small mb-3">Uso deste mês</h6>
+            <div class="row text-center g-3">
+                <div class="col-6 col-md-3">
+                    <div class="h4 mb-0">@Model.Mensagens</div>
+                    <div class="text-muted small">mensagens</div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="h4 mb-0">@Model.Tokens.ToString("N0")</div>
+                    <div class="text-muted small">tokens de IA</div>
+                </div>
+                <div class="col-12 col-md-6">
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span class="text-muted">Voz</span>
+                        <span>
+                            @MinSeg(Model.VozUsadaSeg)
+                            @if (Model.VozLimiteSeg is int l) { <text> / @MinSeg(l)</text> } else { <text> (ilimitado)</text> }
+                        </span>
+                    </div>
+                    @if (Model.VozLimiteSeg is int)
+                    {
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar @(vozPct >= 100 ? "bg-danger" : "bg-success")"
+                                 style="width: @vozPct%"></div>
+                        </div>
+                        @if (vozPct >= 100)
+                        {
+                            <div class="text-danger small mt-1">Cota de voz esgotada — use por texto até o dia 1º.</div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -3,3 +3,13 @@ __pycache__/
 *.pyc
 ~\$*.xlsx
 *.xlsx
+
+# Python venv
+.venv/
+venv/
+
+# .NET (painel saas/web)
+bin/
+obj/
+appsettings.Development.json
+appsettings.Production.json

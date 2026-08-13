@@ -1,0 +1,13 @@
+@page
+@{
+    ViewData["Title"] = "Acesso negado";
+    Layout = "_Layout";
+}
+<div class="d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="text-center">
+        <div class="display-1 text-hermes"><i class="bi bi-shield-lock"></i></div>
+        <h4 class="mt-3">Acesso negado</h4>
+        <p class="text-muted">Você não tem permissão para acessar esta página.</p>
+        <a asp-page="/Dashboard" class="btn btn-hermes">Voltar ao painel</a>
+    </div>
+</div>

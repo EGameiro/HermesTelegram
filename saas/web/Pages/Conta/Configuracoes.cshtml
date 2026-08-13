@@ -1,0 +1,46 @@
+@page
+@model HermesSaaS.Web.Pages.Conta.ConfiguracoesModel
+@{
+    ViewData["Title"] = "Configurações";
+}
+<h4 class="mb-4"><i class="bi bi-sliders text-hermes"></i> Configurações do assistente</h4>
+
+@if (Model.Salvo)
+{
+    <div class="alert alert-success py-2">Configurações salvas. ✅</div>
+}
+
+<div class="card p-4" style="max-width: 640px;">
+    <form method="post">
+        <div class="mb-3">
+            <label class="form-label">Cidade (para previsão do tempo)</label>
+            <input asp-for="Input.Cidade" class="form-control" />
+        </div>
+        <div class="form-check form-switch mb-3">
+            <input asp-for="Input.VozAtiva" class="form-check-input" role="switch" />
+            <label class="form-check-label" asp-for="Input.VozAtiva">Enviar lembretes por voz (áudio)</label>
+        </div>
+        <div class="row g-3">
+            <div class="col-6">
+                <label class="form-label">Hora dos lembretes de contas</label>
+                <div class="input-group">
+                    <input asp-for="Input.HoraLembrete" type="number" min="0" max="23" class="form-control" />
+                    <span class="input-group-text">h</span>
+                </div>
+            </div>
+            <div class="col-6">
+                <label class="form-label">Antecedência de compromissos</label>
+                <div class="input-group">
+                    <input asp-for="Input.AntecedenciaMin" type="number" min="0" max="240" class="form-control" />
+                    <span class="input-group-text">min</span>
+                </div>
+            </div>
+        </div>
+        <div class="mb-3 mt-3">
+            <label class="form-label">Fuso horário</label>
+            <input asp-for="Input.Fuso" class="form-control" />
+            <div class="form-text">Ex.: America/Sao_Paulo</div>
+        </div>
+        <button type="submit" class="btn btn-hermes"><i class="bi bi-save"></i> Salvar</button>
+    </form>
+</div>

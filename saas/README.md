@@ -24,9 +24,9 @@ saas/
 Cada **usuário é um tenant**. Toda tabela de domínio tem `UsuarioId`, e toda query
 **deve** filtrar por ele (isolamento — padrão `HasQueryFilter` do FaceRenew).
 
-Tabelas (todas com prefixo **`01`**; nome começa com dígito → usar crase no MySQL):
-`01Usuarios`, `01TelegramVinculos`, `01Planos`, `01Assinaturas`, `01Pagamentos`,
-`01UsoMensal`, `01Configuracoes`, `01ContasPagar`, `01Compromissos`, `01HistoricoConversa`.
+Tabelas (todas com prefixo **`H01`**):
+`H01Usuarios`, `H01TelegramVinculos`, `H01Planos`, `H01Assinaturas`, `H01Pagamentos`,
+`H01UsoMensal`, `H01Configuracoes`, `H01ContasPagar`, `H01Compromissos`, `H01HistoricoConversa`.
 
 Aplicar (num MySQL 8):
 ```bash
@@ -44,7 +44,7 @@ mysql -u <user> -p < database/schema.sql
    no bot → vínculo criado → bot passa a atender.
 
 ## Fluxo de vínculo (resumo)
-1. Painel gera `TokenVinculo` (curto, com `TokenExpiraEm`) na `01TelegramVinculos` do usuário.
+1. Painel gera `TokenVinculo` (curto, com `TokenExpiraEm`) na `H01TelegramVinculos` do usuário.
 2. Usuário abre `t.me/<bot>?start=<token>` ou envia `/start <token>`.
 3. Bot valida o token (não expirado), grava o `TelegramUserId`, seta `StatusConexao=conectado`.
 4. A partir daí, mensagens daquele `TelegramUserId` são atendidas como aquele tenant.

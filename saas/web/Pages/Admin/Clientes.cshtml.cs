@@ -70,6 +70,21 @@ public class ClientesModel : PageModel
         usuario.Status = "ativo";
         usuario.AtualizadoEm = DateTime.UtcNow;
 
+        // Registra o pagamento manual (aparece nas Faturas do cliente). Plano grátis não gera cobrança.
+        if (plano.PrecoMensal > 0)
+        {
+            _db.Pagamentos.Add(new Pagamento
+            {
+                UsuarioId = usuarioId,
+                Valor = plano.PrecoMensal,
+                Data = hoje,
+                Status = "pago",
+                Metodo = "manual",
+                Observacoes = $"Ativação manual do plano {plano.Nome}",
+                CriadoEm = DateTime.UtcNow,
+            });
+        }
+
         await _db.SaveChangesAsync();
         Msg = $"Plano {plano.Nome} ativado para {usuario.NomeCompleto}.";
         return RedirectToPage();

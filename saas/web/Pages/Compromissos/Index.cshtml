@@ -1,0 +1,54 @@
+@page
+@model HermesSaaS.Web.Pages.Compromissos.IndexModel
+@{
+    ViewData["Title"] = "Compromissos";
+}
+<h4 class="mb-4"><i class="bi bi-calendar-event text-hermes"></i> Meus compromissos</h4>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-4">
+        <div class="card p-3">
+            <h6 class="text-muted text-uppercase small mb-3">Novo compromisso</h6>
+            <form method="post" asp-page-handler="Add">
+                <div class="mb-2">
+                    <label class="form-label small">Descrição</label>
+                    <input asp-for="Input.Descricao" class="form-control" placeholder="Ex.: Reunião com a Adriana" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small">Quando</label>
+                    <input asp-for="Input.Quando" type="datetime-local" class="form-control" />
+                </div>
+                <button class="btn btn-hermes w-100" type="submit"><i class="bi bi-plus-lg"></i> Agendar</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+        <div class="card p-0">
+            <div class="p-3 border-bottom fw-semibold">Próximos</div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <tbody>
+                    @foreach (var c in Model.Itens)
+                    {
+                        <tr>
+                            <td class="ps-3 fw-semibold">@c.Descricao</td>
+                            <td class="text-muted">@c.Quando.ToString("dd/MM/yyyy 'às' HH:mm")</td>
+                            <td class="text-end pe-3" style="width: 80px;">
+                                <form method="post" asp-page-handler="Remover" class="d-inline" onsubmit="return confirm('Cancelar este compromisso?');">
+                                    <input type="hidden" name="id" value="@c.Id" />
+                                    <button class="btn btn-sm btn-outline-danger" title="Cancelar"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    @if (!Model.Itens.Any())
+                    {
+                        <tr><td class="text-center text-muted py-4">Nenhum compromisso agendado. 🎉</td></tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

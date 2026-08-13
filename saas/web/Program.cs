@@ -47,6 +47,7 @@ builder.Services.ConfigureApplicationCookie(o =>
 });
 
 builder.Services.AddScoped<OnboardingService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 var app = builder.Build();
 

@@ -48,8 +48,12 @@
             <aside class="col-12 col-md-3 col-lg-2 sidebar py-3">
                 <nav class="nav flex-column">
                     <a class="nav-link @Active("/Dashboard")" asp-page="/Dashboard"><i class="bi bi-speedometer2 me-1"></i> Painel</a>
+                    <a class="nav-link @Active("/Contas")" asp-page="/Contas/Index"><i class="bi bi-cash-coin me-1"></i> Minhas contas</a>
+                    <a class="nav-link @Active("/Compromissos")" asp-page="/Compromissos/Index"><i class="bi bi-calendar-event me-1"></i> Compromissos</a>
                     <a class="nav-link @Active("/Telegram")" asp-page="/Telegram/Conectar"><i class="bi bi-telegram me-1"></i> Conectar Telegram</a>
                     <a class="nav-link @Active("/Conta/Configuracoes")" asp-page="/Conta/Configuracoes"><i class="bi bi-sliders me-1"></i> Configurações</a>
+                    <a class="nav-link @Active("/Faturas")" asp-page="/Faturas/Index"><i class="bi bi-receipt me-1"></i> Faturas</a>
+                    <a class="nav-link @Active("/Conta/Index")" asp-page="/Conta/Index"><i class="bi bi-person-gear me-1"></i> Minha conta</a>
                     @if (isAdmin)
                     {
                         <hr class="my-2" />
@@ -59,6 +63,14 @@
                 </nav>
             </aside>
             <main class="col-12 col-md-9 col-lg-10 py-4">
+                @if (TempData["Ok"] != null)
+                {
+                    <div class="alert alert-success alert-dismissible fade show">@TempData["Ok"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+                }
+                @if (TempData["Erro"] != null)
+                {
+                    <div class="alert alert-danger alert-dismissible fade show">@TempData["Erro"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+                }
                 @RenderBody()
             </main>
         </div>

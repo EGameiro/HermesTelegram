@@ -1,0 +1,62 @@
+@page
+@model HermesSaaS.Web.Pages.Faturas.IndexModel
+@{
+    ViewData["Title"] = "Faturas";
+    var ptbr = new System.Globalization.CultureInfo("pt-BR");
+    string Money(decimal v) => "R$ " + v.ToString("N2", ptbr);
+}
+<h4 class="mb-4"><i class="bi bi-receipt text-hermes"></i> Faturas</h4>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-4">
+        <div class="card p-3 h-100">
+            <h6 class="text-muted text-uppercase small">Plano atual</h6>
+            <div class="h4 mb-1">@(Model.Assinatura?.Plano?.Nome ?? "—")</div>
+            <span class="badge bg-secondary mb-2 align-self-start">@(Model.Assinatura?.Status ?? "—")</span>
+            @if ((Model.Assinatura?.Plano?.PrecoMensal ?? 0) > 0)
+            {
+                <p class="mb-1 small">Mensalidade: <strong>@Money(Model.Assinatura!.Plano!.PrecoMensal)</strong></p>
+            }
+            @if (Model.Assinatura?.Status == "trial" && Model.Assinatura.TrialAte is DateOnly ate)
+            {
+                <p class="text-muted small mb-0">Teste grátis até @ate.ToString("dd/MM/yyyy")</p>
+            }
+            else if (Model.Assinatura?.DataRenovacao is DateOnly ren)
+            {
+                <p class="text-muted small mb-0">Próxima renovação: @ren.ToString("dd/MM/yyyy")</p>
+            }
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+        <div class="card p-0 h-100">
+            <div class="p-3 border-bottom fw-semibold">Histórico de pagamentos</div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr><th class="ps-3">Data</th><th>Método</th><th>Status</th><th class="text-end pe-3">Valor</th></tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var p in Model.Pagamentos)
+                    {
+                        <tr>
+                            <td class="ps-3">@p.Data.ToString("dd/MM/yyyy")</td>
+                            <td class="text-capitalize">@p.Metodo</td>
+                            <td><span class="badge @(p.Status == "pago" ? "bg-success" : "bg-warning")">@p.Status</span></td>
+                            <td class="text-end pe-3">@Money(p.Valor)</td>
+                        </tr>
+                    }
+                    @if (!Model.Pagamentos.Any())
+                    {
+                        <tr><td colspan="4" class="text-center text-muted py-4">Nenhum pagamento registrado ainda.</td></tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<p class="text-muted small mt-3">
+    <i class="bi bi-info-circle"></i> Na fase de teste, os pagamentos são registrados manualmente pela equipe.
+</p>

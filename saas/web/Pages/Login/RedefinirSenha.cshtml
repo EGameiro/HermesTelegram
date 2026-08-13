@@ -1,0 +1,34 @@
+@page
+@model HermesSaaS.Web.Pages.Login.RedefinirSenhaModel
+@{
+    ViewData["Title"] = "Redefinir senha";
+    Layout = "_Layout";
+}
+<div class="d-flex justify-content-center align-items-center" style="min-height: 90vh;">
+    <div class="card p-4 shadow-sm" style="max-width: 400px; width: 100%;">
+        <h3 class="text-hermes mb-1"><i class="bi bi-shield-lock"></i> Nova senha</h3>
+        @if (Model.Sucesso)
+        {
+            <div class="alert alert-success mt-3">Senha redefinida com sucesso! 🎉</div>
+            <a asp-page="/Login" class="btn btn-hermes w-100">Entrar</a>
+        }
+        else
+        {
+            @if (!string.IsNullOrEmpty(Model.Erro))
+            {
+                <div class="alert alert-danger py-2">@Model.Erro</div>
+            }
+            <p class="text-muted mb-4">Crie uma nova senha para <strong>@Model.Email</strong>.</p>
+            <form method="post">
+                <input type="hidden" asp-for="Email" />
+                <input type="hidden" asp-for="Token" />
+                <div class="mb-3">
+                    <label class="form-label">Nova senha</label>
+                    <input asp-for="NovaSenha" type="password" class="form-control" autofocus />
+                    <div class="form-text">Mínimo 6 caracteres, com ao menos um número.</div>
+                </div>
+                <button type="submit" class="btn btn-hermes w-100">Redefinir senha</button>
+            </form>
+        }
+    </div>
+</div>

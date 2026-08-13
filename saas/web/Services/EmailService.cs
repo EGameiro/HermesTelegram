@@ -1,0 +1,52 @@
+using MailKit.Net.Smtp;
+using MailKit.Security;
+using MimeKit;
+
+namespace HermesSaaS.Web.Services;
+
+public interface IEmailService
+{
+    Task EnviarAsync(string destinatario, string assunto, string corpoHtml);
+}
+
+/// <summary>Envio de e-mail via SMTP (MailKit). Config em EmailSettings do appsettings.
+/// Se o Host estiver vazio, apenas loga (não quebra o fluxo em dev sem SMTP).</summary>
+public class EmailService : IEmailService
+{
+    private readonly IConfiguration _config;
+    private readonly ILogger<EmailService> _log;
+
+    public EmailService(IConfiguration config, ILogger<EmailService> log)
+    {
+        _config = config;
+        _log = log;
+    }
+
+    public async Task EnviarAsync(string destinatario, string assunto, string corpoHtml)
+    {
+        var s = _config.GetSection("EmailSettings");
+        var host = s["Host"];
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            _log.LogWarning("SMTP não configurado (EmailSettings:Host vazio). E-mail para {Dest} não enviado.", destinatario);
+            return;
+        }
+
+        var msg = new MimeMessage();
+        msg.From.Add(new MailboxAddress(s["NomeRemetente"] ?? "Hermes", s["EmailRemetente"] ?? ""));
+        msg.To.Add(MailboxAddress.Parse(destinatario));
+        msg.Subject = assunto;
+        msg.Body = new TextPart("html") { Text = corpoHtml };
+
+        var port = int.Parse(s["Port"] ?? "587");
+        var useSsl = bool.Parse(s["UseSsl"] ?? "false");
+        var socket = useSsl || port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls;
+
+        using var client = new SmtpClient();
+        client.ServerCertificateValidationCallback = (_, _, _, _) => true;
+        await client.ConnectAsync(host, port, socket);
+        await client.AuthenticateAsync(s["Username"] ?? "", s["Password"] ?? "");
+        await client.SendAsync(msg);
+        await client.DisconnectAsync(true);
+    }
+}

@@ -1,0 +1,59 @@
+@page
+@model HermesSaaS.Web.Pages.Conta.IndexModel
+@{
+    ViewData["Title"] = "Minha conta";
+}
+<h4 class="mb-4"><i class="bi bi-person-gear text-hermes"></i> Minha conta</h4>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-6">
+        <div class="card p-3 mb-3">
+            <h6 class="text-muted text-uppercase small mb-3">Dados</h6>
+            <p class="mb-1"><strong>@Model.Usuario?.NomeCompleto</strong></p>
+            <p class="text-muted mb-1">@Model.Usuario?.Email</p>
+            <p class="mb-0"><span class="badge bg-secondary">@(Model.Assinatura?.Plano?.Nome ?? "—")</span>
+                <span class="badge bg-light text-dark">@(Model.Usuario?.Status ?? "—")</span></p>
+        </div>
+
+        <div class="card p-3">
+            <h6 class="text-muted text-uppercase small mb-3">Alterar senha</h6>
+            <form method="post" asp-page-handler="Senha">
+                <div class="mb-2">
+                    <label class="form-label small">Senha atual</label>
+                    <input asp-for="SenhaAtual" type="password" class="form-control" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small">Nova senha</label>
+                    <input asp-for="SenhaNova" type="password" class="form-control" />
+                    <div class="form-text">Mínimo 6 caracteres, com ao menos um número.</div>
+                </div>
+                <button class="btn btn-hermes" type="submit">Salvar nova senha</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card p-3 border-warning mb-3">
+            <h6 class="text-warning text-uppercase small mb-2">Cancelar assinatura</h6>
+            <p class="small text-muted">Ao cancelar, o assistente deixa de responder no Telegram. Seus dados continuam guardados.</p>
+            <form method="post" asp-page-handler="Cancelar" onsubmit="return confirm('Tem certeza que deseja cancelar a assinatura?');">
+                <button class="btn btn-outline-warning" type="submit">Cancelar assinatura</button>
+            </form>
+        </div>
+
+        <div class="card p-3 border-danger">
+            <h6 class="text-danger text-uppercase small mb-2"><i class="bi bi-exclamation-octagon"></i> Excluir meus dados (LGPD)</h6>
+            <p class="small text-muted mb-2">
+                Apaga <strong>permanentemente</strong> sua conta e todos os dados (contas, compromissos, histórico e vínculo do Telegram). Esta ação é irreversível.
+            </p>
+            <form method="post" asp-page-handler="Excluir"
+                  onsubmit="return confirm('Isso apaga TUDO e não pode ser desfeito. Continuar?');">
+                <div class="mb-2">
+                    <label class="form-label small">Confirme com sua senha</label>
+                    <input asp-for="ConfirmarExclusao" type="password" class="form-control" />
+                </div>
+                <button class="btn btn-danger" type="submit"><i class="bi bi-trash"></i> Excluir minha conta e meus dados</button>
+            </form>
+        </div>
+    </div>
+</div>

@@ -24,8 +24,9 @@ saas/
     ├── Data/             ← AppUser, AppDbContext (H01* ExcludeFromMigrations), entidades,
     │                        CustomClaimsFactory, DatabaseSeeder, Migrations (só AspNet*)
     ├── Services/         ← OnboardingService (cadastro + token de vínculo), BrTime
-    └── Pages/            ← Login, Cadastro, Dashboard, Telegram/Conectar,
-                             Conta/Configuracoes, Admin/Clientes
+    └── Pages/            ← Login, Cadastro, Dashboard, Contas, Compromissos,
+                             Telegram/Conectar, Conta/Configuracoes, Conta (senha/
+                             cancelar/LGPD), Faturas, Admin/Clientes
 ```
 
 ## Decisões (da especificação)
@@ -53,11 +54,12 @@ mysql -u <user> -p < database/schema.sql
 2. ✅ **Refatorar o bot p/ multi-tenant** (`bot/`) — feito. Ao receber mensagem, resolve o
    tenant por `TelegramUserId`; escopa contas/compromissos/config por `UsuarioId`; mede uso
    (tokens/voz/TTS/mensagens) em `H01UsoMensal`; aplica o **limite de voz** do plano.
-3. 🚧 **Painel web (.NET)** (`web/`) — fundação pronta: login/cadastro (Identity), multi-tenancy
-   por `UsuarioId` (claim + `HasQueryFilter`, padrão FaceRenew), onboarding com **token de
-   vínculo**, dashboard (plano + uso do mês), conexão do Telegram, configurações, e
-   **ativação manual de plano** pelo admin. Falta: "Meus dados" (contas/compromissos pela
-   web), faturas, conta (trocar senha/cancelar/LGPD), reset de senha por e-mail.
+3. ✅ **Painel web (.NET)** (`web/`) — login/cadastro (Identity), multi-tenancy por `UsuarioId`
+   (claim + `HasQueryFilter`, padrão FaceRenew), onboarding com **token de vínculo**, dashboard
+   (plano + uso do mês), **contas a pagar** e **compromissos** pela web (CRUD, espelho do bot),
+   conexão do Telegram, configurações, **faturas**, **conta** (trocar senha / cancelar /
+   excluir dados LGPD), e **ativação manual de plano** (admin, registra pagamento). Pendência
+   menor: reset de senha por e-mail (SMTP).
 4. ⬜ **Fluxo de onboarding ponta a ponta**: site gera token → usuário faz `/start <token>`
    no bot → vínculo criado → bot passa a atender.
 

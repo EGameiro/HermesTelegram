@@ -44,7 +44,7 @@ public class IndexModel : PageModel
             return RedirectToPage();
         }
         var user = await _users.GetUserAsync(User);
-        if (user is null) return RedirectToPage("/Login");
+        if (user is null) return RedirectToPage("/Login/Index");
 
         var res = await _users.ChangePasswordAsync(user, SenhaAtual, SenhaNova);
         if (res.Succeeded)
@@ -75,7 +75,7 @@ public class IndexModel : PageModel
     public async Task<IActionResult> OnPostExcluirAsync()
     {
         var user = await _users.GetUserAsync(User);
-        if (user is null) return RedirectToPage("/Login");
+        if (user is null) return RedirectToPage("/Login/Index");
 
         if (string.IsNullOrEmpty(ConfirmarExclusao) || !await _users.CheckPasswordAsync(user, ConfirmarExclusao))
         {
@@ -94,6 +94,6 @@ public class IndexModel : PageModel
         }
 
         await _signIn.SignOutAsync();
-        return RedirectToPage("/Login");
+        return RedirectToPage("/Login/Index");
     }
 }

@@ -11,11 +11,11 @@ public class LogoutModel : PageModel
 
     public LogoutModel(SignInManager<AppUser> signIn) => _signIn = signIn;
 
-    public IActionResult OnGet() => RedirectToPage("/Login");
+    public IActionResult OnGet() => RedirectToPage("/Login/Index");
 
     public async Task<IActionResult> OnPostAsync()
     {
         await _signIn.SignOutAsync();
-        return RedirectToPage("/Login");
+        return RedirectToPage("/Login/Index");
     }
 }

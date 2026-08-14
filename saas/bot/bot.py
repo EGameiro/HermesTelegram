@@ -190,6 +190,14 @@ def web_context(text):
 # Contas a pagar
 # ---------------------------------------------------------------------------
 _BILL_ADD_KW = ["conta de", "conta da", "conta do", "boleto", "fatura", "vence", "a pagar", "pagar"]
+# Intenção explícita de CADASTRAR conta/pagamento — dispara mesmo sem número na frase
+# (aí o fluxo pede descrição/valor/vencimento que faltarem).
+_BILL_ADD_INTENT = [
+    "agendar pagamento", "agende pagamento", "agendar um pagamento", "agende um pagamento",
+    "agenda um pagamento", "agenda pagamento", "cadastrar conta", "cadastrar uma conta",
+    "cadastre uma conta", "cadastra uma conta", "adicionar conta", "adiciona uma conta",
+    "anota uma conta", "anotar conta", "nova conta",
+]
 _BILL_LIST_KW = [
     "minhas contas", "quais contas", "contas a pagar", "o que tenho pra pagar",
     "o que tenho para pagar", "lista de contas", "listar contas", "tenho pra pagar",
@@ -201,6 +209,8 @@ def is_bill_add(text):
     if not BILLS_ENABLED:
         return False
     low = text.lower()
+    if any(p in low for p in _BILL_ADD_INTENT):  # intenção clara → entra e pede o que faltar
+        return True
     tem_dinheiro = any(kw in low for kw in _BILL_ADD_KW) or "reais" in low or "r$" in low
     return tem_dinheiro and any(ch.isdigit() for ch in low)
 

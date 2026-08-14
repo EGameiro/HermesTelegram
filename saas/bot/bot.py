@@ -356,8 +356,14 @@ def is_bill_list(text):
         return True
     if any(kw in low for kw in _BILL_LIST_KW):
         return True
-    # "quanto/total ... pagar" → também é consulta de contas
-    if "pagar" in low and ("quanto" in low or "total" in low):
+    # Pergunta sobre "quanto/valor total" em contexto financeiro → SEMPRE consulta de contas
+    # do app (nunca controles externos). Ex.: "qual o valor total agendado?",
+    # "quanto tenho pra pagar esse mês?", "qual o valor total que vou pagar até esse mês?".
+    total_cue = "quanto" in low or "total" in low
+    money_cue = any(w in low for w in (
+        "pagar", "conta", "agendad", "boleto", "despesa", "venc",
+        "gasto", "valor", "reais", "r$"))
+    if total_cue and money_cue:
         return True
     return False
 

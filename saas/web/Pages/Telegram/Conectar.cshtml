@@ -16,9 +16,31 @@
             @if (!string.IsNullOrEmpty(Model.Vinculo?.TelegramUsername)) { <text>para <strong>@@@Model.Vinculo!.TelegramUsername</strong></text>}.
             É só conversar com o bot no Telegram.
         </p>
-        <form method="post" asp-page-handler="Gerar">
-            <button class="btn btn-outline-secondary btn-sm" type="submit">Gerar novo código (reconectar outro Telegram)</button>
-        </form>
+
+        @if (link != null)
+        {
+            <div class="alert alert-info">
+                <div class="mb-2"><strong>Novo código gerado</strong> — para conectar <em>outro</em> Telegram (isso substitui o atual):</div>
+                <ol class="mb-2">
+                    <li class="mb-2">
+                        Abra o bot:
+                        <a href="@link" target="_blank" class="btn btn-hermes btn-sm ms-1">
+                            <i class="bi bi-box-arrow-up-right"></i> Abrir @@@Model.BotUsername
+                        </a>
+                    </li>
+                    <li>Ou envie ao bot: <code class="bg-light px-2 py-1 rounded">/start @Model.Token</code></li>
+                </ol>
+                <div class="small text-muted mb-0">
+                    Válido até @Model.TokenExpiraEm?.ToLocalTime().ToString("HH:mm") (30 min). Recarregue a página após conectar.
+                </div>
+            </div>
+        }
+        else
+        {
+            <form method="post" asp-page-handler="Gerar">
+                <button class="btn btn-outline-secondary btn-sm" type="submit">Gerar novo código (reconectar outro Telegram)</button>
+            </form>
+        }
     </div>
 }
 else

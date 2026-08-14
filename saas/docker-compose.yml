@@ -1,19 +1,7 @@
-# Hermes SaaS — stack multi-tenant (bot + Ollama opcional).
-# O banco é MySQL 8 EXTERNO (o mesmo padrão do FaceRenew) — configure MYSQL_* no Environment.
+# Hermes SaaS — bot multi-tenant (worker de long polling). LLM via Groq (nuvem),
+# então NÃO precisa de ollama. Banco MySQL 8 EXTERNO — configure MYSQL_* no Environment.
 # Aplique antes o schema: saas/database/schema.sql.
 services:
-  ollama:
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    environment:
-      # Descarrega o modelo da RAM após 10 min ocioso (libera memória p/ outros apps da VPS).
-      - OLLAMA_KEEP_ALIVE=10m
-    volumes:
-      - ollama_data:/root/.ollama
-    mem_limit: ${OLLAMA_MEM_LIMIT:-5g}
-    networks:
-      - hermes
-
   bot:
     build: ./bot
     restart: unless-stopped
@@ -25,10 +13,8 @@ services:
       - MYSQL_DB=${MYSQL_DB:-hermes_saas}
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      # --- Cérebro: "ollama" (local) ou "groq" (nuvem rápida) ---
-      - OLLAMA_URL=http://ollama:11434
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-hermes3:3b}
-      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      # --- Cérebro: Groq (nuvem, rápido) ---
+      - LLM_PROVIDER=${LLM_PROVIDER:-groq}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
       - SYSTEM_PROMPT=Você é o Hermes, um assistente útil e direto. Responda em português do Brasil.
@@ -38,13 +24,3 @@ services:
       - OPENAI_TTS_VOICE=${OPENAI_TTS_VOICE:-nova}
       # --- Fuso p/ data/hora e varredura de lembretes ---
       - TZ=${TZ:-America/Sao_Paulo}
-    depends_on:
-      - ollama
-    networks:
-      - hermes
-
-volumes:
-  ollama_data:
-
-networks:
-  hermes:

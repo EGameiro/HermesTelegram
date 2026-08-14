@@ -1,0 +1,7 @@
+bin/
+obj/
+.vs/
+dp-keys/
+*.user
+appsettings.Development.json
+Properties/PublishProfiles/

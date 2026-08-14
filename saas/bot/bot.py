@@ -851,9 +851,7 @@ def handle(update):
         if not text:
             send_message(chat_id, "⚠️ Não consegui entender o áudio. Pode repetir ou escrever?")
             return
-        # No cadastro de conta/compromisso não mostra o eco — a confirmação (📝 Entendi) já resume os dados.
-        if not is_bill_add(text) and not is_reminder_add(text):
-            send_message(chat_id, f"🎤 Entendi: \"{text}\"")
+        # Não mostra eco da transcrição — a resposta/confirmação já basta.
     if not text:
         return
 

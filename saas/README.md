@@ -85,13 +85,35 @@ o envia como `/start <token>` ao bot — fechando o ciclo com a Etapa 2.
 ```bash
 cd saas/web
 # 1) aplicar o schema num MySQL 8 (uma vez): mysql -u <user> -p < ../database/schema.sql
-# 2) ajustar ConnectionStrings:DefaultConnection no appsettings.json (ou env)
+# 2) ajustar ConnectionStrings:DefaultConnection no appsettings.Development.json (fora do git)
 dotnet run
 ```
 O `DatabaseSeeder` aplica a migration do Identity no startup e cria as roles + o admin
 (`AdminSeed` no appsettings; padrão `admin@hermes.local` / `Admin@123` — trocar em produção).
-Env de produção: `ConnectionStrings__DefaultConnection`, `AdminSeed__Senha`,
-`Telegram__BotUsername`.
+
+### Deploy do painel no SmartASP (IIS, .NET 8)
+O projeto tem `TargetFramework net8.0` (runtime que o SmartASP tem). O banco
+`db_a43aea_hermes` já existe com as tabelas `H01*`; o seeder cria as `AspNet*` no 1º start.
+
+1. **Application Settings** (painel SmartASP) — a connection string NÃO vai no código:
+   ```
+   ASPNETCORE_ENVIRONMENT = Production
+   ConnectionStrings__DefaultConnection = Server=mysql8001.site4now.net;Port=3306;Database=db_a43aea_hermes;User=a43aea_hermes;Password=***;AllowPublicKeyRetrieval=True;SslMode=Preferred;
+   AdminSeed__Senha = <senha forte>            # ou troque após o 1º login
+   Telegram__BotUsername = <bot de produção>
+   EmailSettings__Host = <smtp>                # opcional (reset de senha)
+   EmailSettings__Username = ...
+   EmailSettings__Password = ...
+   EmailSettings__EmailRemetente = ...
+   ```
+2. **Publicar (Visual Studio):** botão direito no projeto → **Publicar** → perfil **FTP** do SmartASP
+   (caminho `/site/wwwroot`), configuração **Release**, framework **net8.0**, modo **Dependente do
+   framework**, marcar "Excluir arquivos adicionais no destino".
+3. **App Pool no IIS:** .NET CLR = **No Managed Code**; pipeline = **Integrated**.
+4. **Pós-deploy:** abrir `/Login`, entrar como admin, trocar a senha; testar cadastro → gerar token.
+
+> O painel é só metade: o **bot** (Python) roda no **VPS Dokploy** apontando pro mesmo
+> `db_a43aea_hermes` (env `MYSQL_*`). Publicar o painel não sobe o bot.
 
 ## Como o bot multi-tenant funciona (Etapa 2)
 

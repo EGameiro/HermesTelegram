@@ -16,3 +16,5 @@ appsettings.Production.json
 .vs/
 *.user
 dp-keys/
+Properties/PublishProfiles/
+dotnet-tools.json

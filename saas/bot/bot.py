@@ -446,14 +446,27 @@ def _normaliza_venc(iso):
     return d.isoformat()
 
 
+def _juntar_pt(itens):
+    """Junta itens em PT: 'a' | 'a e b' | 'a, b e c'."""
+    if not itens:
+        return ""
+    if len(itens) == 1:
+        return itens[0]
+    return ", ".join(itens[:-1]) + " e " + itens[-1]
+
+
 def extract_bill(text, usuario_id):
-    """Usa o modelo p/ extrair {descricao, valor, vencimento} da mensagem. Retorna dict ou None."""
+    """Extrai {descricao, valor, vencimento} da mensagem — cada campo pode vir None se o
+    usuário não disse. Retorna o dict (com Nones) ou None só se o modelo/JSON falhar.
+    Quem chama valida o que falta."""
     hoje = hoje_local().isoformat()
     sys_prompt = (
         f"Hoje é {hoje}. Extraia da mensagem do usuário os dados de UMA conta a pagar. "
         "Responda APENAS um objeto JSON, sem texto extra, com as chaves: "
-        '"descricao" (string curta, ex: "Luz"), "valor" (número em reais, ponto decimal, ou null), '
-        '"vencimento" (data no formato YYYY-MM-DD; se o ano não for dito, use o próximo vencimento futuro; ou null). '
+        '"descricao" (string curta do que é a conta, ex: "Luz", ou null), '
+        '"valor" (número em reais com ponto decimal, ou null), '
+        '"vencimento" (data YYYY-MM-DD; se o ano não for dito, use o próximo vencimento futuro; ou null). '
+        "IMPORTANTE: use null para qualquer dado que o usuário NÃO disse — NÃO invente valor nem data. "
         'Exemplo: {"descricao":"Luz","valor":100.0,"vencimento":"2026-08-25"}'
     )
     try:
@@ -466,16 +479,14 @@ def extract_bill(text, usuario_id):
         log.exception("Falha ao extrair conta")
         return None
 
-    desc = (data.get("descricao") or "").strip()
+    desc = (data.get("descricao") or "").strip() or None
     venc = _normaliza_venc(str(data.get("vencimento") or ""))
-    if not desc or not venc:
-        return None
     valor = data.get("valor")
     try:
         valor = float(valor) if valor is not None else None
     except (TypeError, ValueError):
         valor = None
-    return {"descricao": desc[:100], "valor": valor, "vencimento": venc}
+    return {"descricao": desc[:100] if desc else None, "valor": valor, "vencimento": venc}
 
 
 def _fmt_valor(v):
@@ -918,11 +929,27 @@ def handle(update):
     if is_bill_add(text):
         send_typing(chat_id)
         dados = extract_bill(text, usuario_id)
-        if not dados:
+        if dados is None:
             send_message(
                 chat_id,
                 "Não consegui entender os dados da conta. 😕\n"
-                "Tente algo como: \"conta de luz, 100 reais, vence dia 25/08\".",
+                "Tente algo como: \"conta de luz de 100 reais, vence dia 25/08\".",
+            )
+            return
+        # Exige os três: descrição, valor e vencimento. Faltando qualquer um, pede e NÃO cadastra.
+        faltando = []
+        if not dados["descricao"]:
+            faltando.append("o que é a conta (descrição)")
+        if dados["valor"] is None:
+            faltando.append("o valor")
+        if not dados["vencimento"]:
+            faltando.append("a data de vencimento")
+        if faltando:
+            send_message(
+                chat_id,
+                "Pra cadastrar a conta eu preciso de " + _juntar_pt(faltando) + ". "
+                "Pode me mandar completo?\n"
+                "Ex.: \"conta de luz de 100 reais, vence dia 25/08\".",
             )
             return
         pending_reminder.pop(usuario_id, None)

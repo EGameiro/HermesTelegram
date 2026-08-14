@@ -4,10 +4,10 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <!-- In-process (padrao), igual ao FaceRenew que roda OK neste servidor. O crash
-         original era o ServerVersion.AutoDetect abrindo conexao bloqueante no startup;
-         ja trocado por versao fixa em Program.cs. -->
-    <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
+    <!-- Out-of-process: o pool egameiro-001 esta em modo ASP.NET 4.x e ja tem outro app
+         Core in-process (FaceRenew). O proprio SmartASP recomenda out-of-process p/ apps
+         Core adicionais no mesmo pool. Roda como processo Kestrel proprio atras do IIS. -->
+    <AspNetCoreHostingModel>OutOfProcess</AspNetCoreHostingModel>
   </PropertyGroup>
 
   <ItemGroup>

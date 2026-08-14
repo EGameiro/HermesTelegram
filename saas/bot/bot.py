@@ -787,6 +787,30 @@ def help_text(tenant):
     )
 
 
+_MESES_PT = {
+    "janeiro": 1, "fevereiro": 2, "março": 3, "marco": 3, "abril": 4, "maio": 5,
+    "junho": 6, "julho": 7, "agosto": 8, "setembro": 9, "outubro": 10,
+    "novembro": 11, "dezembro": 12,
+}
+
+
+def _echo_sem_data(texto):
+    """Remove a expressão de data do texto — usado só no eco '🎤 Entendi' de cadastro de
+    conta, já que o vencimento aparece formatado na confirmação logo abaixo.
+    Ex.: '...R$ 100,00 para o dia 30 do 8.' → '...R$ 100,00.'"""
+    _meses = "|".join(_MESES_PT.keys())
+    prep = r"(?:para\s+o\s+|para\s+|pra\s+|pro\s+|no\s+|em\s+)?"
+    for p in (
+        prep + r"dia\s+\d{1,2}\s+do\s+(?:m[êe]s\s+)?\d{1,2}",
+        prep + r"dia\s+\d{1,2}\s+de\s+(?:" + _meses + r")",
+        prep + r"dia\s+\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?",
+    ):
+        texto = re.sub(p, "", texto, flags=re.IGNORECASE)
+    texto = re.sub(r"\s{2,}", " ", texto)          # espaços duplos
+    texto = re.sub(r"\s+([.,;!?])", r"\1", texto)   # espaço antes de pontuação
+    return texto.strip()
+
+
 def handle(update):
     msg = update.get("message") or update.get("edited_message")
     if not msg:
@@ -844,7 +868,9 @@ def handle(update):
         if not text:
             send_message(chat_id, "⚠️ Não consegui entender o áudio. Pode repetir ou escrever?")
             return
-        send_message(chat_id, f"🎤 Entendi: \"{text}\"")
+        # No cadastro de conta, o eco mostra só descrição+valor (o vencimento vai na confirmação).
+        echo = _echo_sem_data(text) if is_bill_add(text) else text
+        send_message(chat_id, f"🎤 Entendi: \"{echo}\"")
     if not text:
         return
 

@@ -2,6 +2,7 @@ using HermesSaaS.Web.Data;
 using HermesSaaS.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -60,7 +61,20 @@ builder.Services.AddDataProtection()
         Path.Combine(builder.Environment.ContentRootPath, "dp-keys")))
     .SetApplicationName("HermesSaaS");
 
+// Atrás do Traefik (VPS): confia no X-Forwarded-Proto/For pra saber que o cliente
+// entrou por HTTPS. KnownProxies/Networks limpos porque o proxy está na rede Docker
+// e seu IP não é fixo/conhecido.
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.KnownNetworks.Clear();
+    o.KnownProxies.Clear();
+});
+
 var app = builder.Build();
+
+// PRIMEIRO middleware: aplica os headers do proxy antes de qualquer coisa ler o scheme.
+app.UseForwardedHeaders();
 
 if (!app.Environment.IsDevelopment())
 {
@@ -68,7 +82,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// Sem UseHttpsRedirection: o Traefik já termina o TLS e repassa HTTP na 8080.
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();

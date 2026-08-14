@@ -19,8 +19,10 @@ builder.Services.AddHttpContextAccessor();
 
 var conn = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("ConnectionString 'DefaultConnection' não configurada.");
+// Versão fixa (MySQL 8 do SmartASP) — evita o AutoDetect abrir conexão no startup,
+// que derruba o app se o banco demorar/negar no boot.
 builder.Services.AddDbContext<AppDbContext>(o =>
-    o.UseMySql(conn, ServerVersion.AutoDetect(conn)));
+    o.UseMySql(conn, new MySqlServerVersion(new Version(8, 0, 39))));
 
 builder.Services.AddIdentity<AppUser, IdentityRole>(o =>
 {

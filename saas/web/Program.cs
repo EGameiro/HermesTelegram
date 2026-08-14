@@ -1,6 +1,7 @@
 using HermesSaaS.Web.Data;
 using HermesSaaS.Web.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -50,6 +51,14 @@ builder.Services.ConfigureApplicationCookie(o =>
 
 builder.Services.AddScoped<OnboardingService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+
+// Persiste as chaves de DataProtection em disco. No host shared (sem user profile/HKLM)
+// elas ficariam só em memória → cookie de login e token antiforgery quebram a cada
+// reciclagem do processo. A pasta 'dp-keys' fica no content root (o app tem escrita ali).
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(
+        Path.Combine(builder.Environment.ContentRootPath, "dp-keys")))
+    .SetApplicationName("HermesSaaS");
 
 var app = builder.Build();
 

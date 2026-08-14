@@ -17,16 +17,18 @@ saas/
 │   ├── reminders.py      ← compromissos (H01Compromissos), escopados por UsuarioId
 │   ├── weather.py        ← previsão do tempo (Open-Meteo) — reaproveitado
 │   ├── websearch.py      ← busca na web (DuckDuckGo) — reaproveitado
-│   └── bot.py            ← long polling, roteamento, comandos, agendador multi-tenant
-├── docker-compose.yml    ← stack SaaS (bot + Ollama; MySQL é externo)
+│   ├── bot.py            ← long polling, roteamento, comandos, agendador multi-tenant
+│   └── Dockerfile        ← imagem do bot (python:3.12-slim) p/ o VPS
+├── docker-compose.yml    ← compose do bot SaaS (só o bot; LLM via Groq; MySQL externo)
 ├── .env.example          ← variáveis (Telegram, MySQL, LLM, voz)
-└── web/                  ← painel ASP.NET Core Razor (Etapa 3 — em construção)
+└── web/                  ← painel ASP.NET Core Razor (Etapa 3 — NO AR no VPS)
     ├── Data/             ← AppUser, AppDbContext (H01* ExcludeFromMigrations), entidades,
     │                        CustomClaimsFactory, DatabaseSeeder, Migrations (só AspNet*)
-    ├── Services/         ← OnboardingService (cadastro + token de vínculo), BrTime
-    └── Pages/            ← Login, Cadastro, Dashboard, Contas, Compromissos,
-                             Telegram/Conectar, Conta/Configuracoes, Conta (senha/
-                             cancelar/LGPD), Faturas, Admin/Clientes
+    ├── Services/         ← OnboardingService (cadastro + token de vínculo), EmailService, BrTime
+    ├── Pages/            ← Login (+Esqueci/Redefinir senha), Cadastro, Dashboard, Contas,
+    │                        Compromissos, Telegram/Conectar, Conta/Configuracoes, Conta
+    │                        (senha/cancelar/LGPD), Faturas, Admin/Clientes
+    └── Dockerfile        ← imagem do painel (Kestrel :8080) p/ o VPS
 ```
 
 ## Decisões (da especificação)
@@ -60,8 +62,10 @@ mysql -u <user> -p < database/schema.sql
    conexão do Telegram, configurações, **faturas**, **conta** (trocar senha / cancelar /
    excluir dados LGPD), e **ativação manual de plano** (admin, registra pagamento). Pendência
    menor: reset de senha por e-mail (SMTP).
-4. ⬜ **Fluxo de onboarding ponta a ponta**: site gera token → usuário faz `/start <token>`
-   no bot → vínculo criado → bot passa a atender.
+4. ✅ **Fluxo de onboarding ponta a ponta** — funcionando: site gera token → `/start <token>` no bot →
+   vínculo criado → bot atende como aquele tenant. **Painel e bot NO AR no VPS Dokploy**
+   (ver "Deploy no VPS Dokploy"). Pendências menores: reset de senha por SMTP; botão "Desconectar"
+   Telegram no painel (hoje desconecta-se limpando `H01TelegramVinculos` no banco).
 
 ## Painel web (.NET) — como funciona e rodar
 
@@ -91,29 +95,53 @@ dotnet run
 O `DatabaseSeeder` aplica a migration do Identity no startup e cria as roles + o admin
 (`AdminSeed` no appsettings; padrão `admin@hermes.local` / `Admin@123` — trocar em produção).
 
-### Deploy do painel no SmartASP (IIS, .NET 8)
-O projeto tem `TargetFramework net8.0` (runtime que o SmartASP tem). O banco
-`db_a43aea_hermes` já existe com as tabelas `H01*`; o seeder cria as `AspNet*` no 1º start.
+### Deploy no VPS Dokploy (produção atual — 14/08/2026)
 
-1. **Application Settings** (painel SmartASP) — a connection string NÃO vai no código:
-   ```
-   ASPNETCORE_ENVIRONMENT = Production
-   ConnectionStrings__DefaultConnection = Server=mysql8001.site4now.net;Port=3306;Database=db_a43aea_hermes;User=a43aea_hermes;Password=***;AllowPublicKeyRetrieval=True;SslMode=Preferred;
-   AdminSeed__Senha = <senha forte>            # ou troque após o 1º login
-   Telegram__BotUsername = <bot de produção>
-   EmailSettings__Host = <smtp>                # opcional (reset de senha)
-   EmailSettings__Username = ...
-   EmailSettings__Password = ...
-   EmailSettings__EmailRemetente = ...
-   ```
-2. **Publicar (Visual Studio):** botão direito no projeto → **Publicar** → perfil **FTP** do SmartASP
-   (caminho `/site/wwwroot`), configuração **Release**, framework **net8.0**, modo **Dependente do
-   framework**, marcar "Excluir arquivos adicionais no destino".
-3. **App Pool no IIS:** .NET CLR = **No Managed Code**; pipeline = **Integrated**.
-4. **Pós-deploy:** abrir `/Login`, entrar como admin, trocar a senha; testar cadastro → gerar token.
+> **Por que NÃO SmartASP:** o plano shared tem **um único App Pool** (`egameiro-001`) em modo
+> **ASP.NET 4.x / 32-bit**, compartilhado por 6 sites (um deles é .NET Framework, o que trava o pool
+> em 4.x). ASP.NET Core **derruba o worker** do IIS (WAS "fatal communication error"), mesmo sozinho e
+> out-of-process, e a **Rapid-Fail Protection** tira **todos os 6 sites** do ar. O app está 100% certo
+> (sobe, conecta no MySQL, migrations OK — o stdout provou) — o problema é o IIS/pool, fora do nosso
+> controle no plano. O suporte do SmartASP confirmou: precisa de pool dedicado = **upgrade pago**.
+> **Solução: Docker no VPS Dokploy** (Kestrel direto, sem IIS/ANCM/pool). Sobe limpo.
 
-> O painel é só metade: o **bot** (Python) roda no **VPS Dokploy** apontando pro mesmo
-> `db_a43aea_hermes` (env `MYSQL_*`). Publicar o painel não sobe o bot.
+**Infra:** VPS Dokploy `75.119.139.224`. Banco: **MySQL 8 do SmartASP** `mysql8001.site4now.net` /
+`db_a43aea_hermes` / user `a43aea_hermes` (o VPS conecta remoto, sem precisar liberar IP). O schema
+`H01*` já está aplicado; o seeder cria as `AspNet*` no 1º start.
+
+**Painel (.NET)** — `saas/web/Dockerfile` (multi-stage `sdk:8.0`→`aspnet:8.0`, Kestrel em `:8080`):
+- Dokploy → **Application** → GitHub `EGameiro/HermesTelegram` `master` → Build Type **Dockerfile**
+  (arquivo `saas/web/Dockerfile`, **context `saas/web`**).
+- **Environment:** `ASPNETCORE_ENVIRONMENT=Production`,
+  `ConnectionStrings__DefaultConnection=Server=mysql8001.site4now.net;Port=3306;Database=db_a43aea_hermes;User=a43aea_hermes;Password=***;AllowPublicKeyRetrieval=True;SslMode=None`,
+  `AdminSeed__Senha=***`, `Telegram__BotUsername=digiplayhermesbot`.
+- **Domains:** Container Port **8080** + um domínio (gerado via traefik.me/sslip.io ou próprio) → o
+  **Traefik faz o HTTPS**.
+- **Advanced → Volumes:** montar volume em **`/app/dp-keys`** (chaves de login estáveis entre redeploys).
+- `Program.cs`: `UseForwardedHeaders` (atrás do Traefik, scheme https correto), versão MySQL **fixa
+  `8.0.39`** (sem `AutoDetect`, que abria conexão no boot). `appsettings.json` versionado é placeholder
+  (`localhost`); os segredos vêm das env vars do Dokploy.
+
+**Bot (Python)** — `saas/bot/Dockerfile` (`python:3.12-slim`). Reaproveita o **serviço que já existia**
+no projeto HermesTelegram do Dokploy (era o bot single-tenant `@HermesAssistente`, agora aposentado):
+- **Compose Path** `saas/docker-compose.yml` (só o bot, **sem ollama** — LLM via Groq) **ou** Application
+  com `saas/bot/Dockerfile` (context `saas/bot`).
+- **Environment:** `TELEGRAM_TOKEN=<token do @DigiPlayHermes / digiplayhermesbot>`, `MYSQL_HOST`/`PORT`/
+  `DB`/`USER`/`PASSWORD` (mesmo banco do painel), `LLM_PROVIDER=groq`, `GROQ_API_KEY=***`,
+  `OPENAI_API_KEY=***` (voz, opcional), `TZ=America/Sao_Paulo`. **Sem domínio/porta** (é worker).
+- ⚠️ **Um token por processo:** não rodar o `python bot.py` local e o serviço do VPS ao mesmo tempo com
+  o mesmo token (conflito 409 no Telegram).
+
+**Bot do SaaS = `@DigiPlayHermes` (`digiplayhermesbot`).** O código (`saas/bot`) é o "cérebro"; o token só
+troca o "número". O vínculo é por **TelegramUserId** (mesmo em qualquer bot), então quem já vinculou
+continua vinculado se trocar de bot.
+
+**Admin:** `admin@hermes.local` / `Admin@123`. ⚠️ O `AdminSeed__Senha` só vale na **1ª criação** — o
+seeder **NÃO** atualiza a senha de um admin já existente. Trocar em *Minha conta → Alterar senha*.
+
+**GitHub push:** o repo usa **Git Credential Manager**. Se o token expirar, o push num shell não-
+interativo falha ("could not read Username"); rodar `git push` num terminal próprio abre o popup de
+login e renova. Depois do push, dar **Redeploy** no serviço correspondente (painel e/ou bot).
 
 ## Como o bot multi-tenant funciona (Etapa 2)
 
@@ -145,10 +173,21 @@ por texto até virar o mês. Nada mais é bloqueado.
 respeitam a `HoraLembrete` e a `AntecedenciaMin` de **cada tenant** (via `H01Configuracoes`,
 filtradas no SQL) e já trazem o `TelegramUserId` de destino e o `VozAtiva`.
 
-## Rodar / deploy
-1. Aplicar o schema num MySQL 8: `mysql -u <user> -p < database/schema.sql`.
-2. Preencher `.env` a partir de `.env.example` (Telegram, MySQL, LLM, OpenAI).
-3. Subir o stack `saas/docker-compose.yml` (no Dokploy: apontar para `saas/` e dar Deploy).
+## Cadastro de conta pelo bot (regras)
+Ao cadastrar uma conta a pagar por texto/voz, o bot **exige os três**: descrição, valor e
+vencimento. Faltando qualquer um, ele **pede** o que falta e **não cadastra** (`extract_bill`
+devolve `None` no campo ausente; `handle` valida). Reconhece a intenção mesmo sem número
+("agendar pagamento", "cadastrar conta"…). No **eco** da voz (`🎤 Entendi:`), quando é cadastro
+de conta, a **data é omitida** (aparece formatada só na confirmação `📝 Entendi`, `_echo_sem_data`).
+
+## Rodar o bot localmente (dev)
+1. Schema num MySQL 8 (uma vez): `mysql -u <user> -p < database/schema.sql`.
+2. `cd saas/bot` → `python -m venv .venv` → `.venv\Scripts\activate` → `pip install -r requirements.txt`.
+3. Setar env (`TELEGRAM_TOKEN`, `MYSQL_*`, `LLM_PROVIDER=groq`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `TZ`)
+   e `python bot.py`.
+
+> Produção: ver **"Deploy no VPS Dokploy"**. ⚠️ Não rode o bot local **e** o do VPS com o mesmo token
+> ao mesmo tempo (conflito 409 no Telegram).
 
 ## Fluxo de vínculo (resumo)
 1. Painel gera `TokenVinculo` (curto, com `TokenExpiraEm`) na `H01TelegramVinculos` do usuário.

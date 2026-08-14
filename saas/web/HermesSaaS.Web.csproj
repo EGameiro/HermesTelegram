@@ -4,6 +4,9 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Out-of-process: roda como processo proprio (Kestrel) atras do IIS, sem carregar
+         no worker do pool compartilhado -> nao conflita com sites ASP.NET 4.x nem os derruba. -->
+    <AspNetCoreHostingModel>OutOfProcess</AspNetCoreHostingModel>
   </PropertyGroup>
 
   <ItemGroup>

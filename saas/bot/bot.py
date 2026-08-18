@@ -55,7 +55,7 @@ OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "hermes3:3b")
 # Provedor do "cérebro": "ollama" (local, na VPS) ou "groq" (nuvem, rápido).
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama").lower()
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")  # llama-3.3-70b-versatile foi descomissionado pelo Groq (jun/2026)
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 SYSTEM_PROMPT = os.environ.get(
     "SYSTEM_PROMPT",

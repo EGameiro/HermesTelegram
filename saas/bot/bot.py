@@ -76,12 +76,7 @@ REMINDER_VOICE = os.environ.get("REMINDER_VOICE", "true").lower() != "false"  # 
 TIMING = os.environ.get("HERMES_TIMING", "").lower() in ("1", "true", "yes")  # loga tempo por etapa
 
 # Estado em memória, agora escopado por UsuarioId (o tenant), não pelo chat do Telegram.
-pending_bill: dict[int, dict] = {}        # {"descricao","valor","vencimento"}
-pending_reminder: dict[int, dict] = {}    # {"descricao","quando"}
 history: dict[int, list[dict]] = {}       # usuario_id -> list[{"role","content"}]
-
-_AFIRMATIVO = {"sim", "s", "confirmo", "confirmar", "ok", "isso", "pode", "salvar", "salva", "👍"}
-_NEGATIVO = {"não", "nao", "n", "cancela", "cancelar", "negativo"}
 
 # Frases que indicam pedido de busca na web (além do comando /buscar). Conservador p/ evitar
 # disparar em toda pergunta comum (busca é lenta e pode ser bloqueada por excesso).
@@ -864,39 +859,6 @@ def handle(update):
     usage.registrar(usuario_id, mensagens=1)  # conta a mensagem processada
     cmd = text.strip().lower()
 
-    # Confirmação pendente de uma conta (tem prioridade sobre o resto)
-    if usuario_id in pending_bill:
-        if cmd in _AFIRMATIVO:
-            b = pending_bill.pop(usuario_id)
-            bills.add(usuario_id, b["descricao"], b["valor"], b["vencimento"])
-            send_message(
-                chat_id,
-                "✅ Conta salva.\nVou te lembrar no dia. 🔔",
-            )
-            return
-        if cmd in _NEGATIVO:
-            pending_bill.pop(usuario_id, None)
-            send_message(chat_id, "❌ Ok, não salvei a conta.")
-            return
-        pending_bill.pop(usuario_id, None)
-
-    # Confirmação pendente de um compromisso
-    if usuario_id in pending_reminder:
-        if cmd in _AFIRMATIVO:
-            r = pending_reminder.pop(usuario_id)
-            reminders.add(usuario_id, r["descricao"], r["quando"])
-            antecedencia = tenant.get("AntecedenciaMin", 15)
-            send_message(
-                chat_id,
-                f"✅ Lembrete agendado.\nTe aviso cerca de {antecedencia} min antes. 🔔",
-            )
-            return
-        if cmd in _NEGATIVO:
-            pending_reminder.pop(usuario_id, None)
-            send_message(chat_id, "❌ Ok, não agendei.")
-            return
-        pending_reminder.pop(usuario_id, None)
-
     if cmd in ("/help", "/ajuda"):
         send_message(chat_id, help_text(tenant))
         return
@@ -973,12 +935,11 @@ def handle(update):
                 "Ex.: \"conta de luz de 100 reais, vence dia 25/08\".",
             )
             return
-        pending_reminder.pop(usuario_id, None)
-        pending_bill[usuario_id] = dados
+        bills.add(usuario_id, dados["descricao"], dados["valor"], dados["vencimento"])
         send_message(
             chat_id,
-            f"📝 Entendi:\n\n{dados['descricao']} — {_fmt_valor(dados['valor'])} — "
-            f"vence {_fmt_data(dados['vencimento'])}.\n\nConfirma? Responda \"sim\" pra salvar ou \"não\" pra cancelar.",
+            f"✅ Conta salva: {dados['descricao']} — {_fmt_valor(dados['valor'])} — "
+            f"vence {_fmt_data(dados['vencimento'])}.\nVou te lembrar no dia. 🔔",
         )
         return
 
@@ -1007,12 +968,12 @@ def handle(update):
                 "Tente algo como: \"me avise amanhã às 9h da reunião com a Adriana\".",
             )
             return
-        pending_bill.pop(usuario_id, None)
-        pending_reminder[usuario_id] = dados
+        reminders.add(usuario_id, dados["descricao"], dados["quando"])
+        antecedencia = tenant.get("AntecedenciaMin", 15)
         send_message(
             chat_id,
-            f"📝 Entendi:\n\n{dados['descricao']}\n🕒 {_fmt_datahora(dados['quando'])}\n\n"
-            f"Confirma? Responda \"sim\" pra agendar ou \"não\" pra cancelar.",
+            f"✅ Lembrete agendado: {dados['descricao']} — {_fmt_datahora(dados['quando'])}.\n"
+            f"Te aviso cerca de {antecedencia} min antes. 🔔",
         )
         return
 

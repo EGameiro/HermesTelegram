@@ -10,9 +10,11 @@ import os
 import re
 import json
 import time
+import shutil
 import socket
 import logging
 import threading
+import subprocess
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 
@@ -665,8 +667,31 @@ def transcrever_voz(file_id):
         return None
 
 
+def _normalizar_volume(audio_bytes):
+    """Normaliza o volume do áudio (loudnorm ~ -16 LUFS) via ffmpeg — o TTS da OpenAI
+    sai baixo demais (fica quase inaudível). Se o ffmpeg não existir ou falhar,
+    devolve os bytes originais (não quebra o envio)."""
+    if not audio_bytes or not shutil.which("ffmpeg"):
+        return audio_bytes
+    try:
+        p = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", "pipe:0",
+             "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
+             "-c:a", "libopus", "-b:a", "48000", "-ar", "48000", "-ac", "1",
+             "-f", "ogg", "pipe:1"],
+            input=audio_bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30,
+        )
+        if p.returncode == 0 and p.stdout:
+            return p.stdout
+        log.warning("Normalização de áudio falhou (rc=%s); enviando original.", p.returncode)
+    except Exception:
+        log.exception("Erro ao normalizar áudio; enviando original.")
+    return audio_bytes
+
+
 def tts(texto):
-    """Texto -> áudio Opus (bytes) via OpenAI TTS. Retorna bytes ou None em falha."""
+    """Texto -> áudio Opus (bytes) via OpenAI TTS, com volume normalizado.
+    Retorna bytes ou None em falha."""
     try:
         r = requests.post(
             "https://api.openai.com/v1/audio/speech",
@@ -680,7 +705,7 @@ def tts(texto):
             timeout=120,
         )
         r.raise_for_status()
-        return r.content
+        return _normalizar_volume(r.content)
     except Exception:
         log.exception("Falha ao gerar áudio (TTS)")
         return None

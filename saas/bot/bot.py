@@ -373,6 +373,18 @@ def cancelar_compromisso_por_texto(usuario_id, text):
     if not ativos:
         return "Você não tem compromissos agendados pra cancelar. 🗓️"
     low = text.lower()
+
+    # 0) Citou o NÚMERO (id) do compromisso? Cancela direto por ele.
+    #    Ex.: "cancela a reunião número 3", "desmarca o compromisso #3", "cancela a reunião 3".
+    por_id = {c["id"]: c for c in ativos}
+    mid = re.search(r"(?:n[uú]mero|n[º°]|#)\s*(\d+)", low)
+    if not mid and not re.search(r"\d{1,2}\s*h|\d{1,2}:\d{2}|dia\s+\d|\d{1,2}[/-]\d|(?:às|as|das)\s+\d", low):
+        mid = re.search(r"\b(\d{1,6})\b", low)  # número "solto", só se não houver hora/data na frase
+    if mid and int(mid.group(1)) in por_id:
+        alvo = por_id[int(mid.group(1))]
+        reminders.remover(usuario_id, alvo["id"])
+        return f"🗑️ Compromisso cancelado: {alvo['descricao']} — {_fmt_datahora(alvo['quando'])}."
+
     # 1) filtra pelo período citado (hoje/amanhã/semana/data), se houver
     _, ini, fim = _periodo(text)
     candidatos = [c for c in ativos if ini <= (c["quando"] or "")[:10] <= fim] if ini else ativos

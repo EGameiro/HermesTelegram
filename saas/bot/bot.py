@@ -605,6 +605,21 @@ def system_prompt_agora():
     """O modelo não tem relógio próprio — injetamos a data/hora real a cada mensagem."""
     now = datetime.now(ZoneInfo(TZ))
     dia = _DIAS[now.weekday()]
+    capacidades = ""
+    if BILLS_ENABLED or REMINDERS_ENABLED:
+        capacidades = (
+            "\n\nVOCÊ É A FERRAMENTA. Aqui mesmo, no Telegram, você gerencia diretamente as "
+            "CONTAS A PAGAR e os COMPROMISSOS/LEMBRETES do usuário — você mesmo cadastra, lista "
+            "e avisa no horário. NUNCA sugira nem cite apps/serviços externos (Google Calendar, "
+            "agenda, Todoist, Alexa, Siri, alarme do celular, post-it, e-mail) para isso, e NUNCA "
+            "diga que 'não consegue criar lembretes' — você consegue.\n"
+            "- Criar compromisso/lembrete: se faltar a DATA ou a HORA, apenas PEÇA ('Pra qual dia "
+            "e horário?'). Não recuse nem mande usar outro app.\n"
+            "- Ver a agenda: diga que basta pedir 'quais compromissos eu tenho' (ou por período: "
+            "hoje, amanhã, essa semana).\n"
+            "- Contas: cadastrar = dizer descrição, valor e vencimento; ver o total = 'quanto "
+            "tenho pra pagar esse mês'."
+        )
     return (
         f"{SYSTEM_PROMPT}\n\n"
         f"AGORA: hoje é {dia}, {now.strftime('%d/%m/%Y')}, e são {now.strftime('%H:%M')} "
@@ -617,6 +632,7 @@ def system_prompt_agora():
         f"de hoje, cotações, placares ao vivo): apenas nesses casos, diga que não tem essa "
         f"informação atualizada, em vez de inventar. Nunca recuse uma pergunta comum de "
         f"conhecimento geral alegando falta de internet."
+        f"{capacidades}"
     )
 
 

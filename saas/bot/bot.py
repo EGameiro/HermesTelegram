@@ -265,9 +265,34 @@ def is_reminder_add(text):
     low = text.lower()
     if is_reminder_list(text):  # consulta tem prioridade sobre cadastro
         return False
+    if is_reminder_cancel(text):  # cancelamento tem prioridade sobre cadastro
+        return False
     if not any(c in low for c in _REMINDER_CUE):
         return False
     return _tem_hora(low) or _tem_dia(low)
+
+
+# Cancelar compromisso por linguagem natural (ex.: "cancela a reunião com o Marcelo").
+_REMINDER_CANCEL_CUE = [
+    "cancela", "cancelar", "cancele", "desmarca", "desmarcar", "desmarque",
+    "apaga", "apagar", "apague", "remove", "remover", "remova",
+    "exclui", "excluir", "exclua", "tira ", "tirar",
+]
+# Palavras curtas/comuns ignoradas ao casar a descrição do compromisso com a fala.
+_STOP_CANCEL = {"com", "para", "pra", "pro", "dia", "das", "dos", "uma", "meu", "minha",
+                "meus", "minhas", "que", "esse", "essa", "este", "esta", "the", "compromisso",
+                "reuniao", "reunião", "lembrete", "agenda", "agendamento"}
+
+
+def is_reminder_cancel(text):
+    """Pedido de cancelar/desmarcar um compromisso em linguagem natural."""
+    if not REMINDERS_ENABLED:
+        return False
+    low = text.lower()
+    if not any(c in low for c in _REMINDER_CANCEL_CUE):
+        return False
+    # precisa se referir a um compromisso/agenda (não a uma conta a pagar)
+    return any(n in low for n in _REMINDER_NOUN)
 
 
 def _normaliza_datahora(iso):
@@ -336,6 +361,47 @@ def formatar_lista_lembretes(usuario_id, text=None):
     for l in ls:
         linhas.append(f"#{l['id']} — {l['descricao']} — {_fmt_datahora(l['quando'])}")
     linhas.append("\nCancelar: /cancelar <número>.")
+    return "\n".join(linhas)
+
+
+def cancelar_compromisso_por_texto(usuario_id, text):
+    """Cancela (APAGA) um compromisso a partir de linguagem natural, ex.:
+    'cancela a reunião com o Marcelo' / 'desmarca meu compromisso de amanhã'.
+    Casa pela descrição (palavras distintivas) e/ou pelo período citado. Se ficar
+    ambíguo, lista os compromissos p/ o usuário escolher pelo número. Retorna a resposta."""
+    ativos = reminders.listar(usuario_id)
+    if not ativos:
+        return "Você não tem compromissos agendados pra cancelar. 🗓️"
+    low = text.lower()
+    # 1) filtra pelo período citado (hoje/amanhã/semana/data), se houver
+    _, ini, fim = _periodo(text)
+    candidatos = [c for c in ativos if ini <= (c["quando"] or "")[:10] <= fim] if ini else ativos
+    if not candidatos:
+        candidatos = ativos
+
+    # 2) pontua pela descrição: quantas palavras DISTINTIVAS dela aparecem na fala
+    def _score(c):
+        palavras = [w for w in re.findall(r"[a-zà-ÿ0-9]+", (c["descricao"] or "").lower())
+                    if len(w) >= 3 and w not in _STOP_CANCEL]
+        return sum(1 for w in palavras if w in low)
+
+    com_match = sorted((c for c in candidatos if _score(c) > 0), key=_score, reverse=True)
+    alvo = None
+    if len(com_match) == 1:
+        alvo = com_match[0]
+    elif len(com_match) >= 2 and _score(com_match[0]) > _score(com_match[1]):
+        alvo = com_match[0]
+    elif not com_match and ini and len(candidatos) == 1:
+        alvo = candidatos[0]  # um só no período citado, sem nome
+
+    if alvo:
+        reminders.remover(usuario_id, alvo["id"])
+        return f"🗑️ Compromisso cancelado: {alvo['descricao']} — {_fmt_datahora(alvo['quando'])}."
+
+    # ambíguo ou não encontrado → lista p/ escolher pelo número
+    linhas = ["Qual compromisso você quer cancelar? Responda com /cancelar <número>:"]
+    for c in candidatos:
+        linhas.append(f"#{c['id']} — {c['descricao']} — {_fmt_datahora(c['quando'])}")
     return "\n".join(linhas)
 
 
@@ -1018,6 +1084,9 @@ def handle(update):
             return
         ok = reminders.remover(usuario_id, int(arg))
         send_message(chat_id, "🗑️ Lembrete cancelado." if ok else "Não achei um lembrete com esse número.")
+        return
+    if is_reminder_cancel(text):
+        send_message(chat_id, cancelar_compromisso_por_texto(usuario_id, text))
         return
     if is_reminder_list(text):
         send_message(chat_id, formatar_lista_lembretes(usuario_id, text))

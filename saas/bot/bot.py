@@ -229,7 +229,11 @@ def _tem_dia(low):
     return bool(re.search(r"\b\d{1,2}[/-]\d{1,2}\b", low))
 
 
-_REMINDER_NOUN = ["compromisso", "lembrete", "agenda"]
+# Substantivos que, numa PERGUNTA, indicam consulta da agenda. "reunião", "consulta",
+# "encontro"... são sinônimos de "compromisso" — ex.: "quais reuniões eu tenho hoje?".
+_REMINDER_NOUN = ["compromisso", "lembrete", "agenda", "agendamento",
+                  "reuni", "encontro", "evento",  # "reuni" pega reunião/reuniões/reuniao
+                  "consulta", "dentista", "aniversário", "aniversario"]
 _QUERY_WORD = ["quais", "qual", "o que", "que ", "quantos", "mostra", "mostrar", "lista",
                "listar", "ver ", "tem algum", "tenho algum", "meus", "minha", "quero ver"]
 

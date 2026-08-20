@@ -170,6 +170,7 @@ CREATE TABLE IF NOT EXISTS H01Compromissos (
   UsuarioId   BIGINT       NOT NULL,
   Descricao   VARCHAR(200) NOT NULL,
   Quando      DATETIME     NOT NULL,
+  AvisarEm    DATETIME     NULL,       -- horário explícito do lembrete (NULL = usar AntecedenciaMin do usuário)
   Avisado     TINYINT(1)   NOT NULL DEFAULT 0,
   CriadoEm    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (Id),

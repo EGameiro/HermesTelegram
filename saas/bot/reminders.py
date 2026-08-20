@@ -22,12 +22,14 @@ def _map(row):
     }
 
 
-def add(usuario_id, descricao, quando_iso):
+def add(usuario_id, descricao, quando_iso, avisar_em_iso=None):
     # MySQL DATETIME aceita 'YYYY-MM-DD HH:MM' — troca o 'T' do ISO por espaço.
     quando_sql = (quando_iso or "").replace("T", " ")
+    # AvisarEm: horário explícito do lembrete (NULL = usar AntecedenciaMin do usuário).
+    avisar_sql = avisar_em_iso.replace("T", " ") if avisar_em_iso else None
     lastrowid, _ = db.execute(
-        "INSERT INTO H01Compromissos (UsuarioId, Descricao, Quando) VALUES (%s, %s, %s)",
-        (usuario_id, descricao, quando_sql),
+        "INSERT INTO H01Compromissos (UsuarioId, Descricao, Quando, AvisarEm) VALUES (%s, %s, %s, %s)",
+        (usuario_id, descricao, quando_sql, avisar_sql),
     )
     return lastrowid
 
@@ -62,8 +64,10 @@ def remover(usuario_id, lid):
 
 
 def due(agora_dt):
-    """Compromissos de TODOS os tenants conectados, não avisados, cujo horário está a até
-    AntecedenciaMin (por tenant) de distância de `agora_dt` (datetime).
+    """Compromissos de TODOS os tenants conectados, não avisados, cujo momento de aviso já chegou.
+
+    O momento de aviso é AvisarEm (horário explícito escolhido pelo usuário) quando definido;
+    caso contrário é Quando menos a AntecedenciaMin do tenant (padrão 15 min).
 
     Devolve também o TelegramUserId (destino) e VozAtiva (formato do aviso)."""
     rows = db.query_all(
@@ -81,7 +85,7 @@ def due(agora_dt):
         WHERE l.Avisado = 0
           AND v.StatusConexao = 'conectado'
           AND v.TelegramUserId IS NOT NULL
-          AND l.Quando <= (%s + INTERVAL COALESCE(cfg.AntecedenciaMin, 15) MINUTE)
+          AND COALESCE(l.AvisarEm, l.Quando - INTERVAL COALESCE(cfg.AntecedenciaMin, 15) MINUTE) <= %s
         ORDER BY l.Quando
         """,
         (agora_dt.strftime("%Y-%m-%d %H:%M:%S"),),

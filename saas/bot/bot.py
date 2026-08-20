@@ -274,14 +274,20 @@ def _normaliza_datahora(iso):
 
 
 def extract_reminder(text, usuario_id):
-    """Extrai {descricao, quando} de um compromisso. Retorna dict ou None."""
+    """Extrai {descricao, quando, avisar_em} de um compromisso. Retorna dict ou None.
+    avisar_em = horário em que o usuário quer RECEBER o lembrete (opcional; None se não pedir)."""
     agora = datetime.now(ZoneInfo(TZ))
     sys_prompt = (
         f"Hoje é {agora.strftime('%Y-%m-%d')} e agora são {agora.strftime('%H:%M')} (fuso {TZ}). "
-        "Extraia da mensagem UM compromisso/lembrete. Responda APENAS um JSON, sem texto extra, "
-        'com as chaves: "descricao" (string curta do que é) e "quando" (data e hora no formato '
-        'YYYY-MM-DDTHH:MM). Se a hora não for dita, use 09:00. Use sempre o próximo horário futuro. '
-        'Exemplo: {"descricao":"Reunião com Adriana","quando":"2026-08-11T09:00"}'
+        "Extraia da mensagem UM compromisso/lembrete. Responda APENAS um JSON, sem texto extra, com as chaves: "
+        '"descricao" (string curta do que é), '
+        '"quando" (data e hora do COMPROMISSO no formato YYYY-MM-DDTHH:MM) e '
+        '"avisar_em" (data e hora em que o usuário quer RECEBER o lembrete, mesmo formato, '
+        "ou null se ele NÃO pedir um horário de aviso específico). "
+        "Se a hora do compromisso não for dita, use 09:00. Se o usuário der só a HORA do aviso "
+        "(ex.: 'me avise às 9h'), use a MESMA data do compromisso. Use sempre horários futuros. "
+        'Ex. com aviso: {"descricao":"Reunião com Marcelo","quando":"2026-08-25T10:00","avisar_em":"2026-08-25T09:00"}. '
+        'Ex. sem aviso: {"descricao":"Dentista","quando":"2026-08-21T14:30","avisar_em":null}'
     )
     try:
         data = json.loads(_strip_json(llm_chat(
@@ -295,7 +301,9 @@ def extract_reminder(text, usuario_id):
     quando = _normaliza_datahora(str(data.get("quando") or ""))
     if not desc or not quando:
         return None
-    return {"descricao": desc[:150], "quando": quando}
+    avisar_raw = data.get("avisar_em")
+    avisar_em = _normaliza_datahora(str(avisar_raw)) if avisar_raw else None
+    return {"descricao": desc[:150], "quando": quando, "avisar_em": avisar_em}
 
 
 def _fmt_datahora(iso):
@@ -972,12 +980,16 @@ def handle(update):
                 "Tente algo como: \"me avise amanhã às 9h da reunião com a Adriana\".",
             )
             return
-        reminders.add(usuario_id, dados["descricao"], dados["quando"])
-        antecedencia = tenant.get("AntecedenciaMin", 15)
+        reminders.add(usuario_id, dados["descricao"], dados["quando"], dados.get("avisar_em"))
+        if dados.get("avisar_em"):
+            aviso_txt = f"Te aviso em {_fmt_datahora(dados['avisar_em'])}."
+        else:
+            antecedencia = tenant.get("AntecedenciaMin", 15)
+            aviso_txt = f"Te aviso cerca de {antecedencia} min antes."
         send_message(
             chat_id,
             f"✅ Lembrete agendado: {dados['descricao']} — {_fmt_datahora(dados['quando'])}.\n"
-            f"Te aviso cerca de {antecedencia} min antes. 🔔",
+            f"{aviso_txt} 🔔",
         )
         return
 

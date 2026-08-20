@@ -72,8 +72,15 @@ BILLS_ENABLED = os.environ.get("BILLS_ENABLED", "true").lower() != "false"
 REMINDERS_ENABLED = os.environ.get("REMINDERS_ENABLED", "true").lower() != "false"  # compromissos c/ hora
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")  # p/ transcrever áudio (Whisper); vazio = voz off
 OPENAI_STT_MODEL = os.environ.get("OPENAI_STT_MODEL", "whisper-1")
-OPENAI_TTS_MODEL = os.environ.get("OPENAI_TTS_MODEL", "tts-1")  # texto->voz p/ lembretes
+OPENAI_TTS_MODEL = os.environ.get("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")  # aceita 'instructions' (pt-BR)
 OPENAI_TTS_VOICE = os.environ.get("OPENAI_TTS_VOICE", "nova")
+# As vozes da OpenAI são "otimizadas p/ inglês" e trocam de idioma no meio (leem números/datas
+# em inglês). O gpt-4o-mini-tts aceita 'instructions' p/ fixar o pt-BR. Só é enviado p/ modelos gpt-4o.
+OPENAI_TTS_INSTRUCTIONS = os.environ.get(
+    "OPENAI_TTS_INSTRUCTIONS",
+    "Fale sempre em português do Brasil, com pronúncia natural. "
+    "Pronuncie TODOS os números, valores em reais, horários e datas em português — nunca em inglês.",
+)
 REMINDER_VOICE = os.environ.get("REMINDER_VOICE", "true").lower() != "false"  # lembrete em áudio
 TIMING = os.environ.get("HERMES_TIMING", "").lower() in ("1", "true", "yes")  # loga tempo por etapa
 
@@ -709,15 +716,19 @@ def tts(texto):
     """Texto -> áudio Opus (bytes) via OpenAI TTS, com volume normalizado.
     Retorna bytes ou None em falha."""
     try:
+        payload = {
+            "model": OPENAI_TTS_MODEL,
+            "voice": OPENAI_TTS_VOICE,
+            "input": texto,
+            "response_format": "opus",
+        }
+        # 'instructions' só existe nos modelos gpt-4o-*-tts (fixa o idioma pt-BR).
+        if OPENAI_TTS_INSTRUCTIONS and OPENAI_TTS_MODEL.startswith("gpt-4o"):
+            payload["instructions"] = OPENAI_TTS_INSTRUCTIONS
         r = requests.post(
             "https://api.openai.com/v1/audio/speech",
             headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
-            json={
-                "model": OPENAI_TTS_MODEL,
-                "voice": OPENAI_TTS_VOICE,
-                "input": texto,
-                "response_format": "opus",
-            },
+            json=payload,
             timeout=120,
         )
         r.raise_for_status()

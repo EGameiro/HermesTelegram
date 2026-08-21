@@ -32,6 +32,35 @@
             {
                 <p class="text-muted small mb-0 mt-1">Mensalidade: R$ @Model.Plano!.PrecoMensal.ToString("N2")</p>
             }
+
+            @if (Model.PlanosDisponiveis.Any())
+            {
+                <hr class="my-3" />
+                <h6 class="text-muted text-uppercase small mb-2">Assine e continue após o teste</h6>
+                <div class="d-flex flex-column gap-2">
+                    @foreach (var p in Model.PlanosDisponiveis)
+                    {
+                        var atual = Model.Plano?.Codigo == p.Codigo && Model.Assinatura?.Status == "ativo";
+                        <div class="d-flex justify-content-between align-items-center border rounded p-2">
+                            <div>
+                                <span class="fw-semibold">@p.Nome</span>
+                                @if (p.LimiteVozSegMes is int vs)
+                                {
+                                    <span class="text-muted small">· @(vs / 60) min de voz/mês</span>
+                                }
+                                @if (atual)
+                                {
+                                    <span class="badge bg-success ms-1">Seu plano</span>
+                                }
+                            </div>
+                            <div class="fw-bold text-hermes text-nowrap">
+                                R$ @p.PrecoMensal.ToString("N2")<span class="text-muted fw-normal small">/mês</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <p class="text-muted small mb-0 mt-2"><i class="bi bi-info-circle me-1"></i>Para assinar, fale com o suporte.</p>
+            }
         </div>
     </div>
 

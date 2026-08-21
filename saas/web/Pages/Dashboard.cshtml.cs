@@ -15,6 +15,7 @@ public class DashboardModel : PageModel
     public Plano? Plano { get; set; }
     public TelegramVinculo? Vinculo { get; set; }
     public UsoMensal? Uso { get; set; }
+    public List<Plano> PlanosDisponiveis { get; set; } = new();
 
     public bool Conectado => Vinculo?.StatusConexao == "conectado";
     public int VozUsadaSeg => Uso?.SegundosVoz ?? 0;
@@ -33,5 +34,10 @@ public class DashboardModel : PageModel
 
         var agora = BrTime.Now;
         Uso = await _db.UsoMensal.FirstOrDefaultAsync(u => u.Ano == agora.Year && u.Mes == agora.Month);
+
+        PlanosDisponiveis = await _db.Planos
+            .Where(p => p.Codigo == "pro" || p.Codigo == "business")
+            .OrderBy(p => p.PrecoMensal)
+            .ToListAsync();
     }
 }

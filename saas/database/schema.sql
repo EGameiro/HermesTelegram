@@ -199,9 +199,9 @@ CREATE TABLE IF NOT EXISTS H01HistoricoConversa (
 -- ============================================================================
 INSERT INTO H01Planos (Codigo, Nome, PrecoMensal, LimiteMsgsDia, LimiteVozSegMes, Ativo)
 VALUES
-  ('free',     'Grátis',   0.00, 30,   600,  1),   -- 10 min de voz/mês
-  ('pro',      'Pro',     24.99, NULL, NULL, 1),   -- volume alto (fair-use no app)
-  ('business', 'Business',58.00, NULL, NULL, 1)
+  ('free',     'Grátis',   0.00, 30,   600,   1),   -- 10 min de voz/mês
+  ('pro',      'Pro',     24.99, NULL, 5400,  1),   -- 90 min de voz/mês
+  ('business', 'Business',58.00, NULL, 12000, 1)    -- 200 min de voz/mês
 ON DUPLICATE KEY UPDATE
   Nome=VALUES(Nome), PrecoMensal=VALUES(PrecoMensal),
   LimiteMsgsDia=VALUES(LimiteMsgsDia), LimiteVozSegMes=VALUES(LimiteVozSegMes);

@@ -239,6 +239,24 @@ def is_bill_pay(text):
     return True
 
 
+# Excluir CONTA por linguagem natural (ex.: "cancela a conta número 12", "apaga a conta 12").
+# Exige a palavra "conta"/"boleto"/"despesa" p/ não confundir com cancelar COMPROMISSO.
+_BILL_REMOVE_CUE = [
+    "cancela", "cancelar", "cancele", "apaga", "apagar", "apague", "remove", "remover", "remova",
+    "exclui", "excluir", "exclua", "deleta", "deletar", "delete", "tira ", "tirar",
+]
+
+
+def is_bill_remove(text):
+    """Pedido de EXCLUIR/apagar uma conta, em linguagem natural."""
+    if not BILLS_ENABLED:
+        return False
+    low = text.lower()
+    if not any(c in low for c in _BILL_REMOVE_CUE):
+        return False
+    return any(n in low for n in ("conta", "boleto", "despesa"))
+
+
 # Compromissos com hora ------------------------------------------------------
 _REMINDER_CUE = [
     "me avise", "me avisa", "avise", "avisa", "me lembre", "me lembra", "lembrar", "lembra",
@@ -592,6 +610,47 @@ def marcar_conta_paga_por_texto(usuario_id, text):
     return "\n".join(linhas)
 
 
+def remover_conta_por_texto(usuario_id, text):
+    """EXCLUI uma conta a partir de linguagem natural, por número (id) ou nome.
+    Ex.: 'cancela a conta número 12', 'apaga a conta de luz'. Ambíguo → lista p/ escolher."""
+    pendentes = bills.listar(usuario_id, incluir_pagas=False)
+    if not pendentes:
+        return "Você não tem contas pendentes pra excluir. 🎉"
+    low = text.lower()
+
+    # 0) citou o NÚMERO (id)? exclui direto (guarda contra horários/datas)
+    por_id = {c["id"]: c for c in pendentes}
+    mid = re.search(r"(?:n[uú]mero|n[º°]|#)\s*(\d+)", low)
+    if not mid and not re.search(r"\d{1,2}\s*h|\d{1,2}:\d{2}|dia\s+\d|\d{1,2}[/-]\d|(?:às|as|das)\s+\d", low):
+        mid = re.search(r"\b(\d{1,6})\b", low)
+    if mid and int(mid.group(1)) in por_id:
+        c = por_id[int(mid.group(1))]
+        bills.remover(usuario_id, c["id"])
+        return f"🗑️ Conta excluída: {c['descricao']} — {_fmt_valor(c['valor'])}."
+
+    # 1) casa pelo nome (palavras distintivas da descrição)
+    def _score(c):
+        pal = [w for w in re.findall(r"[a-zà-ÿ0-9]+", (c["descricao"] or "").lower())
+               if len(w) >= 3 and w not in _STOP_PAGA]
+        return sum(1 for w in pal if w in low)
+
+    cm = sorted((c for c in pendentes if _score(c) > 0), key=_score, reverse=True)
+    alvo = None
+    if len(cm) == 1:
+        alvo = cm[0]
+    elif len(cm) >= 2 and _score(cm[0]) > _score(cm[1]):
+        alvo = cm[0]
+    if alvo:
+        bills.remover(usuario_id, alvo["id"])
+        return f"🗑️ Conta excluída: {alvo['descricao']} — {_fmt_valor(alvo['valor'])}."
+
+    # ambíguo/não encontrado → lista p/ escolher pelo número
+    linhas = ["Qual conta você quer excluir? Responda com /remover <número>:"]
+    for c in pendentes:
+        linhas.append(f"#{c['id']} — {c['descricao']}: {_fmt_valor(c['valor'])} — vence {_fmt_data(c['vencimento'])}")
+    return "\n".join(linhas)
+
+
 def _strip_json(s):
     """Remove cercas markdown ```json ... ``` que o modelo às vezes coloca."""
     s = s.strip()
@@ -765,7 +824,7 @@ def system_prompt_agora():
             "hoje, amanhã, essa semana).\n"
             "- Contas: cadastrar = dizer descrição, valor e vencimento; ver o total = 'quanto "
             "tenho pra pagar esse mês'; marcar paga = 'marca a conta número X como paga' ou "
-            "'já paguei a conta X'.\n"
+            "'já paguei a conta X'; excluir = 'apaga a conta número X' ou 'cancela a conta número X'.\n"
             "IMPORTANTE: você NÃO executa essas ações dentro desta conversa — quem cadastra, marca "
             "paga, lista ou cancela é o SISTEMA, quando o usuário usa as frases certas. Então NUNCA "
             "afirme que já cadastrou, marcou como paga, cancelou ou salvou algo. Se um pedido de ação "
@@ -1114,6 +1173,9 @@ def handle(update):
             return
         ok = bills.remover(usuario_id, int(arg))
         send_message(chat_id, "🗑️ Conta removida." if ok else "Não achei uma conta com esse número.")
+        return
+    if is_bill_remove(text):
+        send_message(chat_id, remover_conta_por_texto(usuario_id, text))
         return
     if is_bill_pay(text):
         send_message(chat_id, marcar_conta_paga_por_texto(usuario_id, text))

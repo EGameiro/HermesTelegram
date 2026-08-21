@@ -86,7 +86,7 @@ public class DashboardModel : PageModel
             _log.LogError(ex, "Falha ao enviar e-mail de solicitação de assinatura ({Plano})", plano.Codigo);
         }
 
-        TempData["Ok"] = $"Recebemos seu interesse no plano {plano.Nome}! Em breve entramos em contato para ativar. 🎉";
+        TempData["Ok"] = $"Recebemos seu interesse no plano {plano.Nome}! Ele será ativado em no máximo 24 horas. 🎉";
         return RedirectToPage();
     }
 }

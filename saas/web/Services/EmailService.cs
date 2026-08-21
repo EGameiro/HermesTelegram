@@ -42,11 +42,15 @@ public class EmailService : IEmailService
         var useSsl = bool.Parse(s["UseSsl"] ?? "false");
         var socket = useSsl || port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls;
 
+        _log.LogInformation("Enviando e-mail para {Dest} via {Host}:{Port} ({Socket}), remetente {From}, user {User}.",
+            destinatario, host, port, socket, s["EmailRemetente"], s["Username"]);
+
         using var client = new SmtpClient();
         client.ServerCertificateValidationCallback = (_, _, _, _) => true;
         await client.ConnectAsync(host, port, socket);
         await client.AuthenticateAsync(s["Username"] ?? "", s["Password"] ?? "");
         await client.SendAsync(msg);
         await client.DisconnectAsync(true);
+        _log.LogInformation("E-mail enviado com sucesso para {Dest}.", destinatario);
     }
 }

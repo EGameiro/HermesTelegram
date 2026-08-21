@@ -219,6 +219,26 @@ def is_bill_add(text):
     return tem_dinheiro and any(ch.isdigit() for ch in low)
 
 
+# Marcar conta como PAGA por linguagem natural (ex.: "marca a conta número 12 como paga",
+# "paguei a água"). \b evita colidir com o "pagar" de "quanto tenho pra pagar".
+_BILL_PAY_RE = re.compile(r"\b(paguei|paga|pago|pagas|pagos|quitei|quitar|quitad[ao]|baixei|baixa)\b")
+_STOP_PAGA = {"com", "para", "pra", "pro", "dia", "das", "dos", "uma", "meu", "minha", "meus",
+              "minhas", "que", "esse", "essa", "como", "conta", "contas", "paga", "pago", "pagar",
+              "paguei", "quitei", "marca", "marcar", "the"}
+
+
+def is_bill_pay(text):
+    """Pedido de marcar uma conta como paga, em linguagem natural."""
+    if not BILLS_ENABLED:
+        return False
+    low = text.lower()
+    if not _BILL_PAY_RE.search(low):
+        return False
+    if any(q in low for q in ("quanto", "quais", "quantas", "quantos")):  # é consulta, não ação
+        return False
+    return True
+
+
 # Compromissos com hora ------------------------------------------------------
 _REMINDER_CUE = [
     "me avise", "me avisa", "avise", "avisa", "me lembre", "me lembra", "lembrar", "lembra",
@@ -531,6 +551,47 @@ def formatar_resposta_contas(usuario_id, text):
     return "\n".join(linhas)
 
 
+def marcar_conta_paga_por_texto(usuario_id, text):
+    """Marca uma conta como PAGA a partir de linguagem natural, por número (id) ou nome.
+    Ex.: 'marca a conta número 12 como paga', 'já paguei a água'. Ambíguo → lista p/ escolher."""
+    pendentes = bills.listar(usuario_id, incluir_pagas=False)
+    if not pendentes:
+        return "Você não tem contas pendentes. 🎉"
+    low = text.lower()
+
+    # 0) citou o NÚMERO (id)? marca direto (guarda contra horários/datas)
+    por_id = {c["id"]: c for c in pendentes}
+    mid = re.search(r"(?:n[uú]mero|n[º°]|#)\s*(\d+)", low)
+    if not mid and not re.search(r"\d{1,2}\s*h|\d{1,2}:\d{2}|dia\s+\d|\d{1,2}[/-]\d|(?:às|as|das)\s+\d", low):
+        mid = re.search(r"\b(\d{1,6})\b", low)
+    if mid and int(mid.group(1)) in por_id:
+        c = por_id[int(mid.group(1))]
+        bills.marcar_pago(usuario_id, c["id"])
+        return f"✅ Conta paga: {c['descricao']} — {_fmt_valor(c['valor'])}."
+
+    # 1) casa pelo nome (palavras distintivas da descrição)
+    def _score(c):
+        pal = [w for w in re.findall(r"[a-zà-ÿ0-9]+", (c["descricao"] or "").lower())
+               if len(w) >= 3 and w not in _STOP_PAGA]
+        return sum(1 for w in pal if w in low)
+
+    cm = sorted((c for c in pendentes if _score(c) > 0), key=_score, reverse=True)
+    alvo = None
+    if len(cm) == 1:
+        alvo = cm[0]
+    elif len(cm) >= 2 and _score(cm[0]) > _score(cm[1]):
+        alvo = cm[0]
+    if alvo:
+        bills.marcar_pago(usuario_id, alvo["id"])
+        return f"✅ Conta paga: {alvo['descricao']} — {_fmt_valor(alvo['valor'])}."
+
+    # ambíguo/não encontrado → lista p/ escolher pelo número
+    linhas = ["Qual conta você quer marcar como paga? Responda com /pago <número>:"]
+    for c in pendentes:
+        linhas.append(f"#{c['id']} — {c['descricao']}: {_fmt_valor(c['valor'])} — vence {_fmt_data(c['vencimento'])}")
+    return "\n".join(linhas)
+
+
 def _strip_json(s):
     """Remove cercas markdown ```json ... ``` que o modelo às vezes coloca."""
     s = s.strip()
@@ -703,7 +764,13 @@ def system_prompt_agora():
             "- Ver a agenda: diga que basta pedir 'quais compromissos eu tenho' (ou por período: "
             "hoje, amanhã, essa semana).\n"
             "- Contas: cadastrar = dizer descrição, valor e vencimento; ver o total = 'quanto "
-            "tenho pra pagar esse mês'."
+            "tenho pra pagar esse mês'; marcar paga = 'marca a conta número X como paga' ou "
+            "'já paguei a conta X'.\n"
+            "IMPORTANTE: você NÃO executa essas ações dentro desta conversa — quem cadastra, marca "
+            "paga, lista ou cancela é o SISTEMA, quando o usuário usa as frases certas. Então NUNCA "
+            "afirme que já cadastrou, marcou como paga, cancelou ou salvou algo. Se um pedido de ação "
+            "chegou até você, é porque NÃO foi reconhecido: então oriente o usuário a repetir com a "
+            "frase certa (ex.: 'marca a conta número 12 como paga'), sem fingir que a ação foi feita."
         )
     return (
         f"{SYSTEM_PROMPT}\n\n"
@@ -1047,6 +1114,9 @@ def handle(update):
             return
         ok = bills.remover(usuario_id, int(arg))
         send_message(chat_id, "🗑️ Conta removida." if ok else "Não achei uma conta com esse número.")
+        return
+    if is_bill_pay(text):
+        send_message(chat_id, marcar_conta_paga_por_texto(usuario_id, text))
         return
     if is_bill_list(text):
         send_message(chat_id, formatar_resposta_contas(usuario_id, text))

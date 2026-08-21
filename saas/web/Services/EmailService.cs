@@ -25,15 +25,16 @@ public class EmailService : IEmailService
     public async Task EnviarAsync(string destinatario, string assunto, string corpoHtml)
     {
         var s = _config.GetSection("EmailSettings");
-        var host = s["Host"];
+
+        // Remove caracteres que costumam entrar por engano ao colar (parênteses, < >, aspas, vírgula).
+        static string LimparEmail(string? v) => (v ?? "").Trim().Trim('(', ')', '<', '>', '"', '\'', ',', ';', ' ');
+
+        var host = LimparEmail(s["Host"]);
         if (string.IsNullOrWhiteSpace(host))
         {
             _log.LogWarning("SMTP não configurado (EmailSettings:Host vazio). E-mail para {Dest} não enviado.", destinatario);
             return;
         }
-
-        // Remove caracteres que costumam entrar por engano ao colar (parênteses, < >, aspas, vírgula).
-        static string LimparEmail(string? v) => (v ?? "").Trim().Trim('(', ')', '<', '>', '"', '\'', ',', ';', ' ');
 
         var msg = new MimeMessage();
         var nomeRem = s["NomeRemetente"] ?? "Hermes";
@@ -60,7 +61,7 @@ public class EmailService : IEmailService
         var socket = useSsl || port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls;
 
         _log.LogInformation("Enviando e-mail para {Dest} via {Host}:{Port} ({Socket}), remetente {From}, user {User}.",
-            destinatario, host, port, socket, s["EmailRemetente"], s["Username"]);
+            destinatario, host, port, socket, remetente, usuario);
 
         using var client = new SmtpClient();
         client.ServerCertificateValidationCallback = (_, _, _, _) => true;

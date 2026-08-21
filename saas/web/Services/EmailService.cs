@@ -33,7 +33,21 @@ public class EmailService : IEmailService
         }
 
         var msg = new MimeMessage();
-        msg.From.Add(new MailboxAddress(s["NomeRemetente"] ?? "Hermes", s["EmailRemetente"] ?? ""));
+        var nomeRem = s["NomeRemetente"] ?? "Hermes";
+        var remetente = (s["EmailRemetente"] ?? "").Trim();
+        var usuario = (s["Username"] ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(remetente))
+            remetente = usuario;
+        try
+        {
+            msg.From.Add(new MailboxAddress(nomeRem, remetente));
+        }
+        catch (ParseException)
+        {
+            // EmailRemetente malformado (ex.: caractere inválido) → cai pro Username.
+            _log.LogWarning("EmailRemetente '{Rem}' inválido; usando Username '{User}' como remetente.", remetente, usuario);
+            msg.From.Add(new MailboxAddress(nomeRem, usuario));
+        }
         msg.To.Add(MailboxAddress.Parse(destinatario));
         msg.Subject = assunto;
         msg.Body = new TextPart("html") { Text = corpoHtml };

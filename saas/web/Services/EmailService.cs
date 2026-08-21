@@ -32,10 +32,13 @@ public class EmailService : IEmailService
             return;
         }
 
+        // Remove caracteres que costumam entrar por engano ao colar (parênteses, < >, aspas, vírgula).
+        static string LimparEmail(string? v) => (v ?? "").Trim().Trim('(', ')', '<', '>', '"', '\'', ',', ';', ' ');
+
         var msg = new MimeMessage();
         var nomeRem = s["NomeRemetente"] ?? "Hermes";
-        var remetente = (s["EmailRemetente"] ?? "").Trim();
-        var usuario = (s["Username"] ?? "").Trim();
+        var remetente = LimparEmail(s["EmailRemetente"]);
+        var usuario = LimparEmail(s["Username"]);
         if (string.IsNullOrWhiteSpace(remetente))
             remetente = usuario;
         try
@@ -62,7 +65,7 @@ public class EmailService : IEmailService
         using var client = new SmtpClient();
         client.ServerCertificateValidationCallback = (_, _, _, _) => true;
         await client.ConnectAsync(host, port, socket);
-        await client.AuthenticateAsync(s["Username"] ?? "", s["Password"] ?? "");
+        await client.AuthenticateAsync(usuario, s["Password"] ?? "");
         await client.SendAsync(msg);
         await client.DisconnectAsync(true);
         _log.LogInformation("E-mail enviado com sucesso para {Dest}.", destinatario);

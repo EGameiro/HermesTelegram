@@ -1,8 +1,9 @@
 """Camada de transporte UAZAPI (enviar/receber WhatsApp).
 
-⚠️ A API do UAZAPI varia por versão/instância. Os padrões abaixo são configuráveis
-por env. CONFIRME o endpoint de envio e o formato do webhook com a sua instância
-(ou com o código do Agente Clínica, que já usa UAZAPI) e ajuste se preciso.
+Alinhado ao formato usado no Agente Clínica (mesma versão do UAZAPI):
+- ENVIO:  POST {BASE}/send/text  headers {token}  body {number, text}
+- WEBHOOK: EventType="messages" (ou wook="RECEIVE_MESSAGE"), objeto em payload["message"],
+  remetente em sender_pn, texto em text/content; ignora fromMe/wasSentByApi/isGroup.
 """
 import os
 import logging
@@ -13,10 +14,19 @@ log = logging.getLogger("hermes-wa-spike.uazapi")
 
 BASE = os.environ.get("UAZAPI_BASE_URL", "").rstrip("/")
 TOKEN = os.environ.get("UAZAPI_TOKEN", "")
-# Caminho do endpoint de envio de texto. Padrão comum do UAZAPI: /send/text
 SEND_PATH = os.environ.get("UAZAPI_SEND_PATH", "/send/text")
-# Nome do header de autenticação (UAZAPI costuma usar "token").
-TOKEN_HEADER = os.environ.get("UAZAPI_TOKEN_HEADER", "token")
+
+
+def _limpar_numero(v: str) -> str:
+    return (
+        str(v or "")
+        .replace("@s.whatsapp.net", "")
+        .replace("@c.us", "")
+        .replace("+", "")
+        .replace(" ", "")
+        .replace("-", "")
+        .strip()
+    )
 
 
 def send_text(numero: str, texto: str):
@@ -28,43 +38,39 @@ def send_text(numero: str, texto: str):
     try:
         r = requests.post(
             url,
-            headers={TOKEN_HEADER: TOKEN, "Content-Type": "application/json"},
-            json={"number": numero, "text": texto},
+            headers={"token": TOKEN, "Content-Type": "application/json"},
+            json={"number": _limpar_numero(numero), "text": texto},
             timeout=30,
         )
         r.raise_for_status()
         log.info("Enviado p/ %s (HTTP %s)", numero, r.status_code)
     except Exception:
-        log.exception("Falha ao enviar via UAZAPI (confira BASE_URL/SEND_PATH/token)")
+        log.exception("Falha ao enviar via UAZAPI")
 
 
 def parse_incoming(payload: dict) -> dict | None:
-    """Extrai {numero, texto, from_me} de vários formatos possíveis do UAZAPI.
-    Ajuste conforme o payload REAL que aparecer no log do /webhook."""
+    """Extrai {numero, texto, from_me} do webhook do UAZAPI. Retorna None se não for
+    uma mensagem de texto válida (evento de status, grupo, ou enviada pelo próprio bot)."""
     if not isinstance(payload, dict):
         return None
-    # o objeto da mensagem pode vir em 'message', 'data', ou na raiz
-    m = payload.get("message") or payload.get("data") or payload
-    if not isinstance(m, dict):
+
+    # só eventos de mensagem recebida
+    evento = payload.get("EventType") or payload.get("wook") or ""
+    if evento and evento not in ("messages", "RECEIVE_MESSAGE"):
         return None
 
-    key = m.get("key") if isinstance(m.get("key"), dict) else {}
-    from_me = bool(m.get("fromMe") or key.get("fromMe"))
+    # formato novo: objeto em 'message'; formato antigo: campos na raiz
+    msg = payload.get("message") if isinstance(payload.get("message"), dict) else payload
+    if not isinstance(msg, dict):
+        return None
 
-    numero = (
-        m.get("number") or m.get("sender") or m.get("chatid") or m.get("from")
-        or key.get("remoteJid") or ""
-    )
-    numero = str(numero).split("@")[0].split(":")[0]
+    from_me = bool(msg.get("fromMe") or msg.get("wasSentByApi"))
+    is_group = bool(msg.get("isGroup") or (payload.get("chat") or {}).get("wa_isGroup"))
+    if is_group:
+        return None
 
-    inner = m.get("message") if isinstance(m.get("message"), dict) else {}
-    texto = (
-        m.get("text") or m.get("body") or m.get("conversation")
-        or inner.get("conversation")
-        or (inner.get("extendedTextMessage") or {}).get("text")
-        or ""
-    )
-
+    numero = _limpar_numero(msg.get("sender_pn") or msg.get("sender") or "")
+    texto = msg.get("text") or msg.get("content") or ""
     if not numero:
         return None
     return {"numero": numero, "texto": texto, "from_me": from_me}

@@ -6,12 +6,15 @@ número+texto → geramos a resposta (Groq) → enviamos de volta via UAZAPI.
 Objetivo do spike: provar que dá pra receber e responder no WhatsApp com o mesmo
 "cérebro". NÃO tem multi-tenant/DB ainda (isso é a fase 2).
 """
+import os
 import logging
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 
 import uazapi
 import brain
+
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")  # opcional
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("hermes-wa-spike")
@@ -26,6 +29,10 @@ def health():
 
 @app.post("/webhook")
 async def webhook(req: Request):
+    if WEBHOOK_SECRET:
+        enviado = req.headers.get("x-webhook-secret") or req.query_params.get("secret") or ""
+        if enviado != WEBHOOK_SECRET:
+            raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         payload = await req.json()
     except Exception:

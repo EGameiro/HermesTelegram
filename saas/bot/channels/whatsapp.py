@@ -29,6 +29,8 @@ BASE = os.environ.get("UAZAPI_BASE_URL", "").rstrip("/")
 TOKEN = os.environ.get("UAZAPI_TOKEN", "")
 SEND_PATH = os.environ.get("UAZAPI_SEND_PATH", "/send/text")
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")  # opcional
+# WA_DEBUG=1 loga o payload cru do webhook (p/ inspecionar o formato de texto/áudio da instância).
+WA_DEBUG = os.environ.get("WA_DEBUG", "").lower() in ("1", "true", "yes")
 
 
 def _limpar_numero(v) -> str:
@@ -130,10 +132,10 @@ def parse_incoming(payload: dict) -> channels.Inbound | None:
         return None
 
     nome = msg.get("senderName") or msg.get("pushName") or msg.get("name")
-    tipo = (msg.get("type") or msg.get("messageType") or "text").lower()
+    tipo = str(msg.get("type") or msg.get("messageType") or msg.get("mediaType") or "text").lower()
     content = msg.get("text") or msg.get("content") or ""
 
-    if tipo in ("audio", "ptt"):
+    if "audio" in tipo or tipo == "ptt":
         mid = msg.get("messageid") or msg.get("id") or ""
         url = content if str(content).startswith("http") else None
         try:
@@ -168,9 +170,17 @@ def build_app() -> FastAPI:
         except Exception:
             return {"ignored": True}
 
+        if WA_DEBUG:
+            log.info("WA payload cru: %s", payload)
+
         inbound = parse_incoming(payload)
         if inbound is None:
+            if WA_DEBUG:
+                log.info("WA: payload ignorado (não reconheci como mensagem de texto/áudio).")
             return {"ignored": True}
+        # Log de diagnóstico: mostra EXATAMENTE o texto que o núcleo vai processar.
+        log.info("WA in <- %s | text=%r | voice=%s", inbound.identificador,
+                 (inbound.text or "")[:200], bool(inbound.voice_ref))
         try:
             await run_in_threadpool(engine.processar, inbound, SENDER)
         except Exception:

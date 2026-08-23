@@ -19,7 +19,7 @@ public class ClientesModel : PageModel
     public record ClienteVm(
         long UsuarioId, string Nome, string Email, string StatusUsuario,
         string? PlanoNome, string? StatusAssinatura, DateOnly? TrialAte,
-        bool Conectado, DateTime CriadoEm);
+        bool Conectado, DateTime CriadoEm, int LimiteCompromissos, int LimiteContas);
 
     public async Task OnGetAsync()
     {
@@ -29,16 +29,34 @@ public class ClientesModel : PageModel
         var usuarios = await _db.Usuarios.AsNoTracking().OrderByDescending(u => u.CriadoEm).ToListAsync();
         var assinaturas = await _db.Assinaturas.IgnoreQueryFilters().Include(a => a.Plano).AsNoTracking().ToListAsync();
         var vinculos = await _db.TelegramVinculos.IgnoreQueryFilters().AsNoTracking().ToListAsync();
+        var configs = await _db.Configuracoes.IgnoreQueryFilters().AsNoTracking().ToListAsync();
 
         foreach (var u in usuarios)
         {
             var a = assinaturas.Where(x => x.UsuarioId == u.Id).OrderByDescending(x => x.CriadoEm).FirstOrDefault();
             var v = vinculos.FirstOrDefault(x => x.UsuarioId == u.Id);
+            var cfg = configs.FirstOrDefault(x => x.UsuarioId == u.Id);
             Clientes.Add(new ClienteVm(
                 u.Id, u.NomeCompleto, u.Email, u.Status,
                 a?.Plano?.Nome, a?.Status, a?.TrialAte,
-                v?.StatusConexao == "conectado", u.CriadoEm));
+                v?.StatusConexao == "conectado", u.CriadoEm,
+                cfg?.LimiteCompromissos ?? 100, cfg?.LimiteContas ?? 300));
         }
+    }
+
+    public async Task<IActionResult> OnPostLimitesAsync(long usuarioId, int limiteCompromissos, int limiteContas)
+    {
+        var cfg = await _db.Configuracoes.IgnoreQueryFilters().FirstOrDefaultAsync(c => c.UsuarioId == usuarioId);
+        if (cfg is null)
+        {
+            cfg = new Configuracao { UsuarioId = usuarioId };
+            _db.Configuracoes.Add(cfg);
+        }
+        cfg.LimiteCompromissos = Math.Max(0, limiteCompromissos);
+        cfg.LimiteContas = Math.Max(0, limiteContas);
+        await _db.SaveChangesAsync();
+        Msg = "Limites atualizados. (O bot aplica após o próximo redeploy/reconexão.)";
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostAtivarAsync(long usuarioId, int planoId)

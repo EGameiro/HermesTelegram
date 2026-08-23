@@ -100,6 +100,8 @@ public class Configuracao
     public bool VozAtiva { get; set; } = true;
     public byte HoraLembrete { get; set; } = 8;
     public int AntecedenciaMin { get; set; } = 15;
+    public int LimiteCompromissos { get; set; } = 100;   // compromissos em aberto
+    public int LimiteContas { get; set; } = 300;         // contas (pagas ou não)
     public string? Pin { get; set; }
     public string Fuso { get; set; } = "America/Sao_Paulo";
 }

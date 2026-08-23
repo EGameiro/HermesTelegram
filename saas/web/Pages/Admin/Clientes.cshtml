@@ -25,6 +25,7 @@
                     <th>Status</th>
                     <th>Telegram</th>
                     <th>Desde</th>
+                    <th>Limites (compromissos / contas)</th>
                     <th class="text-end pe-3">Ativar plano</th>
                 </tr>
             </thead>
@@ -55,6 +56,16 @@
                         }
                     </td>
                     <td class="text-muted small">@c.CriadoEm.ToString("dd/MM/yyyy")</td>
+                    <td>
+                        <form method="post" asp-page-handler="Limites" class="d-inline-flex align-items-center gap-1">
+                            <input type="hidden" name="usuarioId" value="@c.UsuarioId" />
+                            <i class="bi bi-calendar-event text-muted small" title="Compromissos em aberto"></i>
+                            <input type="number" name="limiteCompromissos" value="@c.LimiteCompromissos" min="0" class="form-control form-control-sm" style="width:72px;" title="Compromissos em aberto" />
+                            <i class="bi bi-cash-coin text-muted small" title="Contas"></i>
+                            <input type="number" name="limiteContas" value="@c.LimiteContas" min="0" class="form-control form-control-sm" style="width:72px;" title="Contas (pagas ou não)" />
+                            <button class="btn btn-sm btn-outline-secondary" type="submit" title="Salvar limites"><i class="bi bi-check-lg"></i></button>
+                        </form>
+                    </td>
                     <td class="text-end pe-3">
                         <form method="post" asp-page-handler="Ativar" class="d-inline-flex gap-1 justify-content-end">
                             <input type="hidden" name="usuarioId" value="@c.UsuarioId" />
@@ -71,7 +82,7 @@
             }
             @if (!Model.Clientes.Any())
             {
-                <tr><td colspan="6" class="text-center text-muted py-4">Nenhum cliente cadastrado ainda.</td></tr>
+                <tr><td colspan="7" class="text-center text-muted py-4">Nenhum cliente cadastrado ainda.</td></tr>
             }
             </tbody>
         </table>

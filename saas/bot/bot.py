@@ -13,6 +13,7 @@ import time
 import shutil
 import socket
 import logging
+import calendar
 import threading
 import subprocess
 from datetime import datetime, date, timedelta
@@ -209,10 +210,34 @@ _BILL_LIST_KW = [
 ]
 
 
+# Contas a pagar RECORRENTES (mensais) — ex.: "condomínio 600 todo dia 15 por 12 meses".
+_BILL_RECURRING_RE = re.compile(
+    r"\bpor\s+\d+\s+(?:mes(?:es)?|m[êe]s)\b"             # por 12 meses
+    r"|\b\d+\s+contas?\b"                                 # 5 contas
+    r"|\bde\s+\d+\s+em\s+\d+\s+(?:mes(?:es)?|m[êe]s)\b"   # de 2 em 2 meses
+    r"|\btod[oa]s?\s+(?:os\s+)?(?:mes(?:es)?|m[êe]s)\b"   # todo mês
+    r"|\bmensal(?:mente)?\b"
+)
+
+
+def is_bill_recurring(text):
+    """Conta a pagar recorrente/mensal (vence num dia fixo, por N meses)."""
+    if not BILLS_ENABLED:
+        return False
+    low = text.lower()
+    if not _BILL_RECURRING_RE.search(low):
+        return False
+    tem_conta = any(n in low for n in ("conta", "boleto", "despesa"))
+    tem_valor = "reais" in low or "r$" in low or any(kw in low for kw in _BILL_ADD_KW)
+    return (tem_conta or tem_valor) and any(ch.isdigit() for ch in low)
+
+
 def is_bill_add(text):
     if not BILLS_ENABLED:
         return False
     low = text.lower()
+    if is_bill_recurring(text):  # recorrente tem seu próprio fluxo
+        return False
     if any(p in low for p in _BILL_ADD_INTENT):  # intenção clara → entra e pede o que faltar
         return True
     tem_dinheiro = any(kw in low for kw in _BILL_ADD_KW) or "reais" in low or "r$" in low
@@ -822,6 +847,75 @@ def extract_bill(text, usuario_id):
     return {"descricao": desc[:100] if desc else None, "valor": valor, "vencimento": venc}
 
 
+def extract_recurring_bill(text, usuario_id):
+    """Extrai uma conta a pagar RECORRENTE (mensal):
+    {descricao, valor, dia_vencimento, meses, intervalo_meses}. Retorna dict ou None."""
+    hoje = hoje_local().isoformat()
+    sys_prompt = (
+        f"Hoje é {hoje}. Extraia uma conta a pagar RECORRENTE (mensal). Responda APENAS um JSON, "
+        "sem texto extra, com as chaves: "
+        '"descricao" (string curta, ex.: "Condomínio"), '
+        '"valor" (número em reais com ponto decimal, ex.: 600.00), '
+        '"dia_vencimento" (dia do mês do vencimento, 1 a 31), '
+        '"meses" (por quantos MESES/quantas contas repetir; "5 contas"=5, "por 12 meses"=12; '
+        "se não for dito, use 12) e "
+        '"intervalo_meses" (de quantos em quantos meses; "todo mês"=1, "de 2 em 2 meses"=2; padrão 1). '
+        'Ex.: {"descricao":"Condomínio","valor":600.00,"dia_vencimento":15,"meses":12,"intervalo_meses":1}'
+    )
+    try:
+        data = json.loads(_strip_json(llm_chat(
+            [{"role": "system", "content": sys_prompt}, {"role": "user", "content": text}],
+            temperature=0, usuario_id=usuario_id,
+        )))
+    except Exception:
+        log.exception("Falha ao extrair conta recorrente")
+        return None
+
+    def _int(v, padrao=0):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return padrao
+
+    desc = (data.get("descricao") or "").strip()
+    try:
+        valor = float(data.get("valor")) if data.get("valor") is not None else None
+    except (TypeError, ValueError):
+        valor = None
+    dia = _int(data.get("dia_vencimento"))
+    if not desc or valor is None or not (1 <= dia <= 31):
+        return None
+    return {
+        "descricao": desc[:100],
+        "valor": valor,
+        "dia_vencimento": dia,
+        "meses": max(1, _int(data.get("meses"), 12)),
+        "intervalo_meses": max(1, _int(data.get("intervalo_meses"), 1)),
+    }
+
+
+def _add_mes(ano, mes, n):
+    idx = (ano * 12 + (mes - 1)) + n
+    return idx // 12, idx % 12 + 1
+
+
+def _data_venc(ano, mes, dia):
+    ultimo = calendar.monthrange(ano, mes)[1]  # dia 31 em fev vira 28/29
+    return date(ano, mes, min(dia, ultimo))
+
+
+def _gerar_vencimentos(dados):
+    """Gera as datas de vencimento (ISO) de uma conta recorrente mensal. Aplica o teto."""
+    dia = dados["dia_vencimento"]
+    intervalo = max(1, dados["intervalo_meses"])
+    count = min(max(1, dados["meses"]), _MAX_OCORRENCIAS)
+    hoje = hoje_local()
+    ano, mes = hoje.year, hoje.month
+    if _data_venc(ano, mes, dia) < hoje:  # o dia deste mês já passou → começa no próximo
+        ano, mes = _add_mes(ano, mes, 1)
+    return [_data_venc(*_add_mes(ano, mes, intervalo * i), dia).isoformat() for i in range(count)]
+
+
 def _fmt_valor(v):
     if v is None:
         return "valor não informado"
@@ -927,7 +1021,8 @@ def system_prompt_agora():
             "a partir de hoje às 10h por 5 dias' ou 'ir ao médico todo dia às 10h por 10 dias'.\n"
             "- Ver a agenda: diga que basta pedir 'quais compromissos eu tenho' (ou por período: "
             "hoje, amanhã, essa semana).\n"
-            "- Contas: cadastrar = dizer descrição, valor e vencimento; ver o total = 'quanto "
+            "- Contas: cadastrar = dizer descrição, valor e vencimento; recorrente = 'conta de "
+            "condomínio de 600 reais, vencimento todo dia 15, por 12 meses'; ver o total = 'quanto "
             "tenho pra pagar esse mês'; marcar paga = 'marca a conta número X como paga' ou "
             "'já paguei a conta X'; excluir = 'apaga a conta número X' ou 'cancela a conta número X'.\n"
             "IMPORTANTE: você NÃO executa essas ações dentro desta conversa — quem cadastra, marca "
@@ -1287,6 +1382,32 @@ def handle(update):
         return
     if is_bill_list(text):
         send_message(chat_id, formatar_resposta_contas(usuario_id, text))
+        return
+    if is_bill_recurring(text):
+        send_typing(chat_id)
+        dados = extract_recurring_bill(text, usuario_id)
+        if not dados:
+            send_message(
+                chat_id,
+                "Não consegui entender a conta recorrente. 😕\n"
+                "Tente algo como: \"conta de condomínio de 600 reais, vencimento todo dia 15, por 12 meses\".",
+            )
+            return
+        vencimentos = _gerar_vencimentos(dados)
+        if not vencimentos:
+            send_message(chat_id, "Não consegui gerar os vencimentos — confira o dia e a duração.")
+            return
+        for venc in vencimentos:
+            bills.add(usuario_id, dados["descricao"], dados["valor"], venc)
+        intervalo = dados["intervalo_meses"]
+        freq = "todo mês" if intervalo == 1 else f"a cada {intervalo} meses"
+        extra = f"\n(atingiu o limite de {_MAX_OCORRENCIAS} contas)" if len(vencimentos) >= _MAX_OCORRENCIAS else ""
+        send_message(
+            chat_id,
+            f"✅ Criei {len(vencimentos)} contas de \"{dados['descricao']}\" — {_fmt_valor(dados['valor'])}, {freq}.\n"
+            f"🗓️ Vencimentos de {_fmt_data(vencimentos[0])} até {_fmt_data(vencimentos[-1])}.\n"
+            f"Vou te lembrar em cada vencimento. 🔔{extra}",
+        )
         return
     if is_bill_add(text):
         send_typing(chat_id)

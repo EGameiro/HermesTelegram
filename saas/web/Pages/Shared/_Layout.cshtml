@@ -28,6 +28,11 @@
         .sidebar .nav-link { color: #495057; border-radius: .5rem; margin-bottom: .15rem; }
         .sidebar .nav-link.active { background: var(--h-primary); color: #fff; }
         .sidebar .nav-link:hover:not(.active) { background: #ececf6; }
+        .sidebar .nav-link.nav-help:not(.active) {
+            background: rgba(34,197,94,.12); color: #157347; font-weight: 600;
+            border: 1px solid rgba(34,197,94,.35);
+        }
+        .sidebar .nav-link.nav-help:not(.active):hover { background: rgba(34,197,94,.22); }
         .card { border: none; box-shadow: 0 1px 3px rgba(0,0,0,.06); border-radius: .75rem; }
         .wa-float {
             position: fixed; right: 20px; bottom: 20px; z-index: 1080;
@@ -66,7 +71,7 @@
                     <a class="nav-link @Active("/Conta/Configuracoes")" asp-page="/Conta/Configuracoes"><i class="bi bi-sliders me-1"></i> Configurações</a>
                     <a class="nav-link @Active("/Faturas")" asp-page="/Faturas/Index"><i class="bi bi-receipt me-1"></i> Faturas</a>
                     <a class="nav-link @Active("/Conta/Index")" asp-page="/Conta/Index"><i class="bi bi-person-gear me-1"></i> Minha conta</a>
-                    <a class="nav-link @Active("/ComoConfigurar")" asp-page="/ComoConfigurar"><i class="bi bi-question-circle me-1"></i> Como configurar o Hermes</a>
+                    <a class="nav-link nav-help @Active("/ComoConfigurar")" asp-page="/ComoConfigurar"><i class="bi bi-stars me-1"></i> Como configurar o Hermes</a>
                     @if (isAdmin)
                     {
                         <hr class="my-2" />

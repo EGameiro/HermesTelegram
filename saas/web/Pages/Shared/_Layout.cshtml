@@ -93,10 +93,13 @@ else
 {
     <main>@RenderBody()</main>
 }
+@if (isAuth)
+{
     <a href="https://wa.me/5512992231044" target="_blank" rel="noopener"
        class="wa-float" title="Fale conosco no WhatsApp" aria-label="Fale conosco no WhatsApp">
         <i class="bi bi-whatsapp"></i>
     </a>
+}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

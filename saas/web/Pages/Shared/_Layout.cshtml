@@ -29,6 +29,16 @@
         .sidebar .nav-link.active { background: var(--h-primary); color: #fff; }
         .sidebar .nav-link:hover:not(.active) { background: #ececf6; }
         .card { border: none; box-shadow: 0 1px 3px rgba(0,0,0,.06); border-radius: .75rem; }
+        .wa-float {
+            position: fixed; right: 20px; bottom: 20px; z-index: 1080;
+            width: 56px; height: 56px; border-radius: 50%;
+            background: #25D366; color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 30px; text-decoration: none;
+            box-shadow: 0 4px 14px rgba(0,0,0,.28);
+            transition: transform .15s ease, box-shadow .15s ease;
+        }
+        .wa-float:hover { color: #fff; transform: scale(1.08); box-shadow: 0 6px 20px rgba(0,0,0,.32); }
     </style>
 </head>
 <body>
@@ -83,6 +93,10 @@ else
 {
     <main>@RenderBody()</main>
 }
+    <a href="https://wa.me/5512992231044" target="_blank" rel="noopener"
+       class="wa-float" title="Fale conosco no WhatsApp" aria-label="Fale conosco no WhatsApp">
+        <i class="bi bi-whatsapp"></i>
+    </a>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

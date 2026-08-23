@@ -101,7 +101,8 @@ def vencendo(hoje_iso, hora_atual):
     """Contas de TODOS os tenants conectados, não pagas, vencidas (<= hoje), sem lembrete
     enviado, cujo horário de lembrete do tenant (HoraLembrete) já chegou.
 
-    Devolve também o TelegramUserId (destino) e VozAtiva (formato do aviso)."""
+    Devolve (canal, identificador) do destino e VozAtiva (formato do aviso). Um tenant
+    conectado em mais de um canal gera uma linha por canal (avisado em cada um)."""
     rows = db.query_all(
         """
         SELECT
@@ -110,16 +111,17 @@ def vencendo(hoje_iso, hora_atual):
             c.Descricao     AS descricao,
             c.Valor         AS valor,
             c.Vencimento    AS vencimento,
-            v.TelegramUserId AS telegram_user_id,
+            v.Canal              AS canal,
+            v.IdentificadorCanal AS identificador,
             COALESCE(cfg.VozAtiva, 1) AS voz_ativa
         FROM H01ContasPagar c
-        JOIN H01TelegramVinculos v ON v.UsuarioId = c.UsuarioId
+        JOIN H01Vinculos v ON v.UsuarioId = c.UsuarioId
         LEFT JOIN H01Configuracoes cfg ON cfg.UsuarioId = c.UsuarioId
         WHERE c.Pago = 0
           AND c.LembreteEnviado = 0
           AND c.Vencimento <= %s
           AND v.StatusConexao = 'conectado'
-          AND v.TelegramUserId IS NOT NULL
+          AND v.IdentificadorCanal IS NOT NULL
           AND %s >= COALESCE(cfg.HoraLembrete, 8)
         """,
         (hoje_iso, hora_atual),
@@ -127,7 +129,8 @@ def vencendo(hoje_iso, hora_atual):
     out = []
     for r in rows:
         d = _map(r)
-        d["telegram_user_id"] = r["telegram_user_id"]
+        d["canal"] = r["canal"]
+        d["identificador"] = r["identificador"]
         d["voz_ativa"] = int(r["voz_ativa"])
         out.append(d)
     return out

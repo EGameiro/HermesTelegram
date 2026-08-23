@@ -78,9 +78,9 @@
             @if (Model.Conectado)
             {
                 <span class="h5 text-success mb-0"><i class="bi bi-check-circle-fill"></i> Conectado</span>
-                @if (!string.IsNullOrEmpty(Model.Vinculo?.TelegramUsername))
+                @if (!string.IsNullOrEmpty(Model.Vinculo?.NomeExibicao))
                 {
-                    <p class="text-muted small mb-0 mt-2">@@@Model.Vinculo!.TelegramUsername</p>
+                    <p class="text-muted small mb-0 mt-2">@@@Model.Vinculo!.NomeExibicao</p>
                 }
             }
             else

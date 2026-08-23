@@ -28,18 +28,18 @@ public class ClientesModel : PageModel
         // Admin vê TODOS os tenants -> ignora os HasQueryFilter (que escopam por UsuarioId).
         var usuarios = await _db.Usuarios.AsNoTracking().OrderByDescending(u => u.CriadoEm).ToListAsync();
         var assinaturas = await _db.Assinaturas.IgnoreQueryFilters().Include(a => a.Plano).AsNoTracking().ToListAsync();
-        var vinculos = await _db.TelegramVinculos.IgnoreQueryFilters().AsNoTracking().ToListAsync();
+        var vinculos = await _db.Vinculos.IgnoreQueryFilters().AsNoTracking().ToListAsync();
         var configs = await _db.Configuracoes.IgnoreQueryFilters().AsNoTracking().ToListAsync();
 
         foreach (var u in usuarios)
         {
             var a = assinaturas.Where(x => x.UsuarioId == u.Id).OrderByDescending(x => x.CriadoEm).FirstOrDefault();
-            var v = vinculos.FirstOrDefault(x => x.UsuarioId == u.Id);
+            var conectado = vinculos.Any(x => x.UsuarioId == u.Id && x.StatusConexao == "conectado");
             var cfg = configs.FirstOrDefault(x => x.UsuarioId == u.Id);
             Clientes.Add(new ClienteVm(
                 u.Id, u.NomeCompleto, u.Email, u.Status,
                 a?.Plano?.Nome, a?.Status, a?.TrialAte,
-                v?.StatusConexao == "conectado", u.CriadoEm,
+                conectado, u.CriadoEm,
                 cfg?.LimiteCompromissos ?? 100, cfg?.LimiteContas ?? 300));
         }
     }

@@ -1,36 +1,35 @@
-"""Resolução de tenant (Modelo A: identidade pelo TelegramUserId) + vínculo por token
-+ configurações do assistente por usuário.
+"""Resolução de tenant por (canal, identificador) + vínculo por token + config por usuário.
 
-Cada USUÁRIO é um tenant. Um TelegramUserId -> uma conta (UNIQUE no schema).
-Toda operação de domínio (contas/compromissos) recebe o UsuarioId resolvido aqui —
-nunca o chat_id cru vindo do Telegram.
+Cada USUÁRIO é um tenant. A identidade vem SEMPRE do canal autenticado, nunca do input:
+- telegram: identificador = TelegramUserId
+- whatsapp: identificador = telefone (só dígitos)
+
+Backend: tabela genérica H01Vinculos (Canal + IdentificadorCanal). Um usuário pode ter
+um vínculo por canal. O token de onboarding é gerado pelo painel numa linha (UsuarioId,
+Canal) e consumido aqui pelo /start (Telegram) ou pelo código digitado (WhatsApp).
 """
 import logging
 from datetime import datetime
 
 import db
 
-log = logging.getLogger("hermes-bot.tenants")
+log = logging.getLogger("hermes.tenants")
 
-# Cache em memória: telegram_user_id -> dict do tenant (ou None se não resolvido).
-# Invalida no /start (vínculo) para não servir estado velho.
-_cache: dict[int, dict | None] = {}
+# Cache em memória: (canal, identificador) -> dict do tenant (ou None). Invalida no vínculo.
+_cache: dict[tuple[str, str], dict | None] = {}
 
-# Status de usuário que PODEM usar o bot.
 _STATUS_ATIVOS = {"trial", "ativo"}
 
-# Defaults de configuração (espelham os DEFAULT do schema H01Configuracoes).
 _CONFIG_DEFAULT = {
     "Cidade": "Jacareí",
     "VozAtiva": 1,
     "HoraLembrete": 8,
     "AntecedenciaMin": 15,
-    "LimiteCompromissos": 100,   # máx. de compromissos em aberto
-    "LimiteContas": 300,         # máx. de contas (pagas ou não)
+    "LimiteCompromissos": 100,
+    "LimiteContas": 300,
     "Pin": None,
     "Fuso": "America/Sao_Paulo",
 }
-
 
 _plano_free_cache: dict | None = None
 
@@ -45,12 +44,13 @@ def _plano_free():
     return _plano_free_cache or None
 
 
-def resolve(telegram_user_id: int) -> dict | None:
-    """Resolve o tenant a partir do TelegramUserId. Retorna dict com
-    {usuario_id, status, plano_codigo, limite_voz_seg, config...} ou None se o
-    Telegram não estiver vinculado a nenhuma conta ativa."""
-    if telegram_user_id in _cache:
-        return _cache[telegram_user_id]
+def resolve(canal: str, identificador: str) -> dict | None:
+    """Resolve o tenant a partir de (canal, identificador). Retorna dict com
+    {usuario_id, status, plano_codigo, limite_voz_seg, config...} ou None se não vinculado
+    a uma conta ativa."""
+    chave = (canal, str(identificador))
+    if chave in _cache:
+        return _cache[chave]
 
     row = db.query_one(
         """
@@ -62,23 +62,21 @@ def resolve(telegram_user_id: int) -> dict | None:
             p.Codigo             AS plano_codigo,
             p.LimiteVozSegMes    AS limite_voz_seg,
             p.LimiteMsgsDia      AS limite_msgs_dia
-        FROM H01TelegramVinculos v
+        FROM H01Vinculos v
         JOIN H01Usuarios   u ON u.Id = v.UsuarioId
         LEFT JOIN H01Assinaturas a ON a.UsuarioId = u.Id
         LEFT JOIN H01Planos       p ON p.Id = a.PlanoId
-        WHERE v.TelegramUserId = %s AND v.StatusConexao = 'conectado'
+        WHERE v.Canal = %s AND v.IdentificadorCanal = %s AND v.StatusConexao = 'conectado'
         ORDER BY a.CriadoEm DESC
         LIMIT 1
         """,
-        (telegram_user_id,),
+        (canal, str(identificador)),
     )
 
     if not row or row["status_usuario"] not in _STATUS_ATIVOS:
-        _cache[telegram_user_id] = None
+        _cache[chave] = None
         return None
 
-    # Sem assinatura ativa -> aplica os limites do plano 'free' (evita conceder voz
-    # ilimitada por engano; None só significa "ilimitado" quando o plano define assim).
     if row["plano_codigo"] is None:
         free = _plano_free()
         plano_codigo = "free"
@@ -93,35 +91,39 @@ def resolve(telegram_user_id: int) -> dict | None:
         "usuario_id": int(row["usuario_id"]),
         "nome": row["nome"],
         "plano_codigo": plano_codigo,
-        "limite_voz_seg": limite_voz,   # None = ilimitado (só planos pagos)
+        "limite_voz_seg": limite_voz,
         "limite_msgs_dia": limite_msgs,
     }
     tenant.update(get_config(tenant["usuario_id"]))
-    _cache[telegram_user_id] = tenant
+    _cache[chave] = tenant
     return tenant
 
 
-def invalidate(telegram_user_id: int):
-    _cache.pop(telegram_user_id, None)
+def invalidate(canal: str, identificador: str):
+    _cache.pop((canal, str(identificador)), None)
 
 
-def vincular(token: str, telegram_user_id: int, username: str | None):
-    """Consome um TokenVinculo de uso único e amarra o Telegram à conta.
-
+def vincular(token: str, canal: str, identificador: str, nome: str | None):
+    """Consome um TokenVinculo de uso único e amarra o canal à conta.
     Retorna (ok: bool, mensagem: str)."""
     token = (token or "").strip()
     if not token:
         return False, "Código de vínculo vazio."
 
+    identificador = str(identificador)
+    canal_label = "WhatsApp" if canal == "whatsapp" else "Telegram"
+
+    # O token pertence a uma linha (UsuarioId, Canal). Casar o canal evita consumir
+    # um código de WhatsApp pelo Telegram (e vice-versa).
     vinc = db.query_one(
         """
         SELECT v.Id, v.UsuarioId, v.TokenExpiraEm, u.NomeCompleto, u.Status
-        FROM H01TelegramVinculos v
+        FROM H01Vinculos v
         JOIN H01Usuarios u ON u.Id = v.UsuarioId
-        WHERE v.TokenVinculo = %s
+        WHERE v.TokenVinculo = %s AND v.Canal = %s
         LIMIT 1
         """,
-        (token,),
+        (token, canal),
     )
     if not vinc:
         return False, "Código inválido. Gere um novo código no painel e tente de novo."
@@ -132,34 +134,34 @@ def vincular(token: str, telegram_user_id: int, username: str | None):
     if vinc["Status"] not in _STATUS_ATIVOS:
         return False, "Sua conta não está ativa. Fale com o suporte."
 
-    # Esse Telegram já está vinculado a outra conta?
+    # Esse identificador já está conectado a OUTRA conta neste canal?
     outro = db.query_one(
-        "SELECT UsuarioId FROM H01TelegramVinculos "
-        "WHERE TelegramUserId = %s AND UsuarioId <> %s LIMIT 1",
-        (telegram_user_id, vinc["UsuarioId"]),
+        "SELECT UsuarioId FROM H01Vinculos "
+        "WHERE Canal = %s AND IdentificadorCanal = %s AND UsuarioId <> %s LIMIT 1",
+        (canal, identificador, vinc["UsuarioId"]),
     )
     if outro:
         return False, (
-            "Este Telegram já está conectado a outra conta. "
+            f"Este {canal_label} já está conectado a outra conta. "
             "Desconecte-a primeiro no painel."
         )
 
     db.execute(
         """
-        UPDATE H01TelegramVinculos
-           SET TelegramUserId   = %s,
-               TelegramUsername = %s,
-               StatusConexao    = 'conectado',
-               TokenVinculo     = NULL,
-               TokenExpiraEm    = NULL,
-               DataVinculo      = %s
+        UPDATE H01Vinculos
+           SET IdentificadorCanal = %s,
+               NomeExibicao       = %s,
+               StatusConexao      = 'conectado',
+               TokenVinculo       = NULL,
+               TokenExpiraEm      = NULL,
+               DataVinculo        = %s
          WHERE Id = %s
         """,
-        (telegram_user_id, username, datetime.now(), vinc["Id"]),
+        (identificador, nome, datetime.now(), vinc["Id"]),
     )
     ensure_config(vinc["UsuarioId"])
-    invalidate(telegram_user_id)
-    log.info("Telegram %s vinculado ao usuário %s.", telegram_user_id, vinc["UsuarioId"])
+    invalidate(canal, identificador)
+    log.info("%s %s vinculado ao usuário %s.", canal, identificador, vinc["UsuarioId"])
     return True, f"✅ Conta conectada, {vinc['NomeCompleto'].split()[0]}! Pode começar a usar o Hermes. 🚀"
 
 

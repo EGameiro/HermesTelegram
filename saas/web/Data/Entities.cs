@@ -21,18 +21,19 @@ public class Usuario
     public DateTime? AtualizadoEm { get; set; }
 }
 
-/// <summary>Vínculo com o Telegram (Modelo A: guarda o TelegramUserId).</summary>
-public class TelegramVinculo
+/// <summary>Vínculo de canal (multi-canal). Identidade = IdentificadorCanal por Canal:
+/// telegram -> TelegramUserId; whatsapp -> telefone (só dígitos). Um por (usuário, canal).</summary>
+public class Vinculo
 {
     public long Id { get; set; }
     public long UsuarioId { get; set; }
-    public long? TelegramUserId { get; set; }
-    public string? TelegramUsername { get; set; }
+    public string Canal { get; set; } = "telegram";          // telegram|whatsapp
+    public string? IdentificadorCanal { get; set; }          // Telegram user id ou telefone
+    public string? NomeExibicao { get; set; }                // username / pushname
     public string StatusConexao { get; set; } = "pendente";  // pendente|conectado|desconectado
     public string? TokenVinculo { get; set; }
     public DateTime? TokenExpiraEm { get; set; }
     public DateTime? DataVinculo { get; set; }
-    public string? BotToken { get; set; }                    // só Modelo B (não usado)
 }
 
 /// <summary>Catálogo de planos (referência). Semeado pelo schema.sql.</summary>

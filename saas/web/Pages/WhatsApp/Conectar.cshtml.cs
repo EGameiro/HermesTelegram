@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 
-namespace HermesSaaS.Web.Pages.Telegram;
+namespace HermesSaaS.Web.Pages.WhatsApp;
 
 public class ConectarModel : PageModel
 {
@@ -21,7 +21,8 @@ public class ConectarModel : PageModel
     }
 
     public Vinculo? Vinculo { get; set; }
-    public string BotUsername => _config["Telegram:BotUsername"] ?? "SeuBot";
+    /// <summary>Número do bot de WhatsApp que o cliente adiciona/manda mensagem (só dígitos, E.164).</summary>
+    public string BotNumero => _config["WhatsApp:BotNumber"] ?? "";
     public bool Conectado => Vinculo?.StatusConexao == "conectado";
     public string? Token { get; set; }
     public DateTime? TokenExpiraEm { get; set; }
@@ -30,8 +31,7 @@ public class ConectarModel : PageModel
 
     public async Task OnGetAsync()
     {
-        Vinculo = await _db.Vinculos.FirstOrDefaultAsync(v => v.Canal == OnboardingService.CANAL_TELEGRAM);
-        // Reaproveita um token ainda válido; senão, mostra o botão p/ gerar.
+        Vinculo = await _db.Vinculos.FirstOrDefaultAsync(v => v.Canal == OnboardingService.CANAL_WHATSAPP);
         if (Vinculo?.TokenVinculo != null && Vinculo.TokenExpiraEm > DateTime.UtcNow)
         {
             Token = Vinculo.TokenVinculo;
@@ -41,7 +41,7 @@ public class ConectarModel : PageModel
 
     public async Task<IActionResult> OnPostGerarAsync()
     {
-        await _onboarding.GerarTokenVinculoAsync(Uid, OnboardingService.CANAL_TELEGRAM);
+        await _onboarding.GerarTokenVinculoAsync(Uid, OnboardingService.CANAL_WHATSAPP);
         return RedirectToPage();
     }
 }

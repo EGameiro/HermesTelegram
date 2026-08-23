@@ -9,15 +9,23 @@ completa em [`../ESPECIFICACAO_SAAS.md`](../ESPECIFICACAO_SAAS.md).
 saas/
 ├── database/
 │   └── schema.sql        ← schema MySQL 8 multi-tenant (contrato compartilhado)
-├── bot/                  ← bot Python multi-tenant (Etapa 2 — feito)
-│   ├── db.py             ← acesso ao MySQL (PyMySQL, conexão curta por operação)
-│   ├── tenants.py        ← resolve tenant por TelegramUserId, vínculo por token, config
+├── bot/                  ← bot Python multi-tenant e MULTI-CANAL (Fase 2)
+│   ├── app.py            ← entrypoint (processo único): agendador + Telegram + WhatsApp
+│   ├── engine.py         ← NÚCLEO agnóstico de canal: intenções, extração, agendador, processar()
+│   ├── llm.py            ← cérebro (Ollama/Groq), prompt com data/hora, histórico por tenant
+│   ├── voice.py          ← voz agnóstica: Whisper (transcrever) + TTS (bytes↔texto)
+│   ├── config.py         ← configuração (env) + helpers de fuso, num lugar só
+│   ├── channels/         ← adaptadores de canal sobre o núcleo
+│   │   ├── base.py       ← contrato Channel/Sender + registro + Inbound + MsgContext
+│   │   ├── telegram.py   ← Telegram (long polling + transporte + download de voz)
+│   │   └── whatsapp.py   ← WhatsApp/UAZAPI (webhook FastAPI + transporte + download de voz)
+│   ├── db.py             ← acesso ao MySQL (PyMySQL + pool DBUtils)
+│   ├── tenants.py        ← resolve tenant por (Canal, Identificador) em H01Vinculos, vínculo por token
 │   ├── usage.py          ← medição em H01UsoMensal + limite de voz (fair-use)
 │   ├── bills.py          ← contas a pagar (H01ContasPagar), escopadas por UsuarioId
 │   ├── reminders.py      ← compromissos (H01Compromissos), escopados por UsuarioId
 │   ├── weather.py        ← previsão do tempo (Open-Meteo) — reaproveitado
 │   ├── websearch.py      ← busca na web (DuckDuckGo) — reaproveitado
-│   ├── bot.py            ← long polling, roteamento, comandos, agendador multi-tenant
 │   └── Dockerfile        ← imagem do bot (python:3.12-slim) p/ o VPS
 ├── docker-compose.yml    ← compose do bot SaaS (só o bot; LLM via Groq; MySQL externo)
 ├── .env.example          ← variáveis (Telegram, MySQL, LLM, voz)
@@ -37,6 +45,46 @@ saas/
 - Painel em **ASP.NET Core Razor**.
 - Pagamento **manual** na fase de teste (ativação pelo admin).
 - Voz em todos os planos; **grátis = 10 min/mês** (600 s).
+
+## Fase 2 — Arquitetura multi-canal (Telegram + WhatsApp)
+
+O bot monolítico (`bot.py`) foi refatorado num **núcleo agnóstico de canal** + **adaptadores**,
+tudo num **processo único**:
+
+- **`engine.processar(inbound, sender)`** é o cérebro: recebe uma mensagem já normalizada
+  (`Inbound`) e responde por um `Sender` — não sabe se é Telegram ou WhatsApp.
+- **`channels/base.py`** define o contrato `Sender` (`send_text`/`send_typing`/`send_voice`/
+  `baixar_audio`) e um **registro** (`sender_for(canal)`) que o agendador usa para entregar
+  lembretes no canal certo.
+- **`channels/telegram.py`** (long polling) e **`channels/whatsapp.py`** (webhook FastAPI/UAZAPI)
+  normalizam a entrada e implementam o transporte. Cada canal é **independente** e opcional
+  (liga por env): Telegram sobe se houver `TELEGRAM_TOKEN`; WhatsApp se houver
+  `UAZAPI_BASE_URL`+`UAZAPI_TOKEN`. Com os dois ativos, o WhatsApp roda o servidor web (porta
+  `PORT`, default 8080) e o Telegram roda numa thread; um **único agendador** atende ambos.
+
+**Identidade multi-canal (`H01Vinculos`):** a antiga `H01TelegramVinculos` deu lugar à tabela
+genérica **`H01Vinculos`** (`Canal` + `IdentificadorCanal`): telegram → TelegramUserId; whatsapp
+→ telefone (só dígitos). Um usuário pode ter **um vínculo por canal**. `tenants.resolve(canal,
+identificador)` e `tenants.vincular(token, canal, identificador, nome)` operam sobre ela; o
+agendador faz JOIN nela e entrega em cada canal conectado. **Migração:** rodar
+[`database/migration_vinculos.sql`](database/migration_vinculos.sql) UMA vez — cria a tabela e
+**copia os vínculos de Telegram existentes** (quem já está conectado não reconecta).
+
+**Onboarding por canal:** o painel gera um token numa linha `(UsuarioId, Canal)`
+(`OnboardingService.GerarTokenVinculoAsync(uid, canal)`). No Telegram é `/start <token>`
+(deep-link `t.me`); no WhatsApp o cliente **envia só o código** ao bot (`wa.me?text=<token>`) e
+o núcleo reconhece e vincula. Páginas: `Pages/Telegram/Conectar` e `Pages/WhatsApp/Conectar`.
+
+**Voz no WhatsApp:** áudio RECEBIDO é baixado (URL do webhook ou `GET /downloadMedia?id=`) e
+transcrito por Whisper. Áudio ENVIADO (lembrete falado) ainda **não** tem contrato UAZAPI
+provado → cai para **texto** (fallback do engine). Ligar TTS no WhatsApp é follow-up.
+
+**Deploy da Fase 2 (bot + painel juntos):**
+1. MySQL 8: rodar `database/migration_vinculos.sql`.
+2. Redeploy do **painel** e do **bot** (ambos passam a usar `H01Vinculos`).
+3. Para ligar o WhatsApp: criar/usar uma instância UAZAPI, setar `UAZAPI_BASE_URL`/`UAZAPI_TOKEN`
+   no bot + mapear domínio → porta 8080, apontar o webhook do UAZAPI p/ `https://<dominio>/webhook`,
+   e setar `WhatsApp:BotNumber` (número do bot) no painel.
 
 ## O banco (schema.sql)
 Cada **usuário é um tenant**. Toda tabela de domínio tem `UsuarioId`, e toda query
@@ -183,8 +231,8 @@ de conta, a **data é omitida** (aparece formatada só na confirmação `📝 En
 ## Rodar o bot localmente (dev)
 1. Schema num MySQL 8 (uma vez): `mysql -u <user> -p < database/schema.sql`.
 2. `cd saas/bot` → `python -m venv .venv` → `.venv\Scripts\activate` → `pip install -r requirements.txt`.
-3. Setar env (`TELEGRAM_TOKEN`, `MYSQL_*`, `LLM_PROVIDER=groq`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `TZ`)
-   e `python bot.py`.
+3. Setar env (`TELEGRAM_TOKEN` e/ou `UAZAPI_BASE_URL`+`UAZAPI_TOKEN`, `MYSQL_*`, `LLM_PROVIDER=groq`,
+   `GROQ_API_KEY`, `OPENAI_API_KEY`, `TZ`) e `python app.py`.
 
 > Produção: ver **"Deploy no VPS Dokploy"**. ⚠️ Não rode o bot local **e** o do VPS com o mesmo token
 > ao mesmo tempo (conflito 409 no Telegram).

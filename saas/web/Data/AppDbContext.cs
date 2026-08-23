@@ -16,7 +16,7 @@ public class AppDbContext : IdentityDbContext<AppUser>
 
     // Tabelas H01* (contrato compartilhado com o bot; NÃO migradas pelo EF).
     public DbSet<Usuario> Usuarios => Set<Usuario>();
-    public DbSet<TelegramVinculo> TelegramVinculos => Set<TelegramVinculo>();
+    public DbSet<Vinculo> Vinculos => Set<Vinculo>();
     public DbSet<Plano> Planos => Set<Plano>();
     public DbSet<Assinatura> Assinaturas => Set<Assinatura>();
     public DbSet<Pagamento> Pagamentos => Set<Pagamento>();
@@ -61,14 +61,15 @@ public class AppDbContext : IdentityDbContext<AppUser>
             e.Property(u => u.VersaoTermos).HasMaxLength(20);
         });
 
-        b.Entity<TelegramVinculo>(e =>
+        b.Entity<Vinculo>(e =>
         {
-            e.ToTable("H01TelegramVinculos", t => t.ExcludeFromMigrations());
+            e.ToTable("H01Vinculos", t => t.ExcludeFromMigrations());
             e.HasKey(v => v.Id);
-            e.Property(v => v.TelegramUsername).HasMaxLength(100);
+            e.Property(v => v.Canal).HasMaxLength(20).IsRequired();
+            e.Property(v => v.IdentificadorCanal).HasMaxLength(64);
+            e.Property(v => v.NomeExibicao).HasMaxLength(100);
             e.Property(v => v.StatusConexao).HasMaxLength(20);
             e.Property(v => v.TokenVinculo).HasMaxLength(64);
-            e.Property(v => v.BotToken).HasMaxLength(255);
             e.HasQueryFilter(v => v.UsuarioId == GetCurrentUsuarioId());
         });
 

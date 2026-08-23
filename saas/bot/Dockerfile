@@ -9,6 +9,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY *.py .
+# Copia todo o pacote (módulos de topo + subpacote channels/). O .dockerignore
+# exclui .venv/__pycache__. Rollback = redeploy do commit anterior (Dokploy/git).
+COPY . .
 
-CMD ["python", "-u", "bot.py"]
+# Porta do webhook do WhatsApp (FastAPI/uvicorn) quando o canal WhatsApp está ativo.
+# Só é usada se UAZAPI_BASE_URL+UAZAPI_TOKEN estiverem no Environment; o Telegram
+# (long polling) não precisa de porta. Ajuste com PORT.
+EXPOSE 8080
+
+CMD ["python", "-u", "app.py"]

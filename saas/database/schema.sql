@@ -33,23 +33,25 @@ CREATE TABLE IF NOT EXISTS H01Usuarios (
 ) ENGINE=InnoDB;
 
 -- ----------------------------------------------------------------------------
--- 2) Vínculo com o Telegram (Modelo A: guarda o ID; Modelo B: guarda BotToken)
+-- 2) Vínculo de canal (multi-canal: Telegram, WhatsApp...). Modelo A: um bot por
+--    canal identifica o cliente pelo IdentificadorCanal (Telegram user id / telefone).
+--    Um usuário pode ter um vínculo por canal (ex.: Telegram E WhatsApp).
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS H01TelegramVinculos (
-  Id               BIGINT       NOT NULL AUTO_INCREMENT,
-  UsuarioId        BIGINT       NOT NULL,
-  TelegramUserId   BIGINT       NULL,               -- chat_id (identidade). Null até vincular.
-  TelegramUsername VARCHAR(100) NULL,
-  StatusConexao    VARCHAR(20)  NOT NULL DEFAULT 'pendente', -- pendente|conectado|desconectado
-  TokenVinculo     VARCHAR(64)  NULL,               -- token de uso único (onboarding)
-  TokenExpiraEm    DATETIME     NULL,
-  DataVinculo      DATETIME     NULL,
-  BotToken         VARCHAR(255) NULL,               -- SÓ Modelo B (guardar cifrado)
+CREATE TABLE IF NOT EXISTS H01Vinculos (
+  Id                 BIGINT       NOT NULL AUTO_INCREMENT,
+  UsuarioId          BIGINT       NOT NULL,
+  Canal              VARCHAR(20)  NOT NULL,             -- 'telegram' | 'whatsapp'
+  IdentificadorCanal VARCHAR(64)  NULL,                 -- Telegram user id ou telefone (só dígitos). Null até vincular.
+  NomeExibicao       VARCHAR(100) NULL,                 -- username / pushname (exibição)
+  StatusConexao      VARCHAR(20)  NOT NULL DEFAULT 'pendente', -- pendente|conectado|desconectado
+  TokenVinculo       VARCHAR(64)  NULL,                 -- token de uso único (onboarding)
+  TokenExpiraEm      DATETIME     NULL,
+  DataVinculo        DATETIME     NULL,
   PRIMARY KEY (Id),
-  UNIQUE KEY UX_H01Telegram_UserId (TelegramUserId), -- um chat_id -> uma conta
-  KEY IX_H01Telegram_Token (TokenVinculo),
-  KEY IX_H01Telegram_Usuario (UsuarioId),
-  CONSTRAINT FK_H01Telegram_Usuario FOREIGN KEY (UsuarioId)
+  UNIQUE KEY UX_H01Vinculos_Canal_Ident (Canal, IdentificadorCanal), -- um identificador -> uma conta por canal
+  UNIQUE KEY UX_H01Vinculos_Usuario_Canal (UsuarioId, Canal),        -- um vínculo por usuário por canal
+  KEY IX_H01Vinculos_Token (TokenVinculo),
+  CONSTRAINT FK_H01Vinculos_Usuario FOREIGN KEY (UsuarioId)
     REFERENCES H01Usuarios(Id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 

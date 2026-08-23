@@ -11,6 +11,9 @@ public record RegistroResultado(bool Sucesso, long UsuarioId, IEnumerable<string
 /// geração do token de vínculo do Telegram (onboarding).</summary>
 public class OnboardingService
 {
+    public const string CANAL_TELEGRAM = "telegram";
+    public const string CANAL_WHATSAPP = "whatsapp";
+
     private const string ROLE_CLIENTE = "Cliente";
     private const string VERSAO_TERMOS = "1.0";
     private const int TRIAL_DIAS = 14;
@@ -56,9 +59,10 @@ public class OnboardingService
         await _db.SaveChangesAsync();  // materializa Usuario.Id
 
         _db.Configuracoes.Add(new Configuracao { UsuarioId = usuario.Id });
-        _db.TelegramVinculos.Add(new TelegramVinculo
+        _db.Vinculos.Add(new Vinculo
         {
             UsuarioId = usuario.Id,
+            Canal = CANAL_TELEGRAM,
             StatusConexao = "pendente",
         });
         _db.Assinaturas.Add(new Assinatura
@@ -94,15 +98,15 @@ public class OnboardingService
         return new RegistroResultado(true, usuario.Id, Array.Empty<string>());
     }
 
-    /// <summary>Gera (ou renova) o token de vínculo do Telegram do usuário logado.
-    /// Retorna o token curto a ser enviado como /start &lt;token&gt; ao bot.</summary>
-    public async Task<string> GerarTokenVinculoAsync(long usuarioId)
+    /// <summary>Gera (ou renova) o token de vínculo de um canal do usuário logado.
+    /// Retorna o token curto (Telegram: /start &lt;token&gt;; WhatsApp: enviar o código ao bot).</summary>
+    public async Task<string> GerarTokenVinculoAsync(long usuarioId, string canal = CANAL_TELEGRAM)
     {
-        var vinc = await _db.TelegramVinculos.FirstOrDefaultAsync(v => v.UsuarioId == usuarioId);
+        var vinc = await _db.Vinculos.FirstOrDefaultAsync(v => v.UsuarioId == usuarioId && v.Canal == canal);
         if (vinc is null)
         {
-            vinc = new TelegramVinculo { UsuarioId = usuarioId, StatusConexao = "pendente" };
-            _db.TelegramVinculos.Add(vinc);
+            vinc = new Vinculo { UsuarioId = usuarioId, Canal = canal, StatusConexao = "pendente" };
+            _db.Vinculos.Add(vinc);
         }
 
         var token = GerarToken(8);

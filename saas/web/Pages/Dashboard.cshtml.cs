@@ -25,7 +25,7 @@ public class DashboardModel : PageModel
 
     public Assinatura? Assinatura { get; set; }
     public Plano? Plano { get; set; }
-    public TelegramVinculo? Vinculo { get; set; }
+    public Vinculo? Vinculo { get; set; }
     public UsoMensal? Uso { get; set; }
     public List<Plano> PlanosDisponiveis { get; set; } = new();
 
@@ -42,7 +42,7 @@ public class DashboardModel : PageModel
         Assinatura = await _db.Assinaturas.Include(a => a.Plano)
             .OrderByDescending(a => a.CriadoEm).FirstOrDefaultAsync();
         Plano = Assinatura?.Plano;
-        Vinculo = await _db.TelegramVinculos.FirstOrDefaultAsync();
+        Vinculo = await _db.Vinculos.FirstOrDefaultAsync(v => v.Canal == OnboardingService.CANAL_TELEGRAM);
 
         var agora = BrTime.Now;
         Uso = await _db.UsoMensal.FirstOrDefaultAsync(u => u.Ano == agora.Year && u.Mes == agora.Month);

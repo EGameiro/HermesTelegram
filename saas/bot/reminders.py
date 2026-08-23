@@ -69,7 +69,8 @@ def due(agora_dt):
     O momento de aviso é AvisarEm (horário explícito escolhido pelo usuário) quando definido;
     caso contrário é Quando menos a AntecedenciaMin do tenant (padrão 15 min).
 
-    Devolve também o TelegramUserId (destino) e VozAtiva (formato do aviso)."""
+    Devolve (canal, identificador) do destino e VozAtiva (formato do aviso). Um tenant
+    conectado em mais de um canal gera uma linha por canal (avisado em cada um)."""
     rows = db.query_all(
         """
         SELECT
@@ -77,14 +78,15 @@ def due(agora_dt):
             l.UsuarioId     AS usuario_id,
             l.Descricao     AS descricao,
             l.Quando        AS quando,
-            v.TelegramUserId AS telegram_user_id,
+            v.Canal              AS canal,
+            v.IdentificadorCanal AS identificador,
             COALESCE(cfg.VozAtiva, 1) AS voz_ativa
         FROM H01Compromissos l
-        JOIN H01TelegramVinculos v ON v.UsuarioId = l.UsuarioId
+        JOIN H01Vinculos v ON v.UsuarioId = l.UsuarioId
         LEFT JOIN H01Configuracoes cfg ON cfg.UsuarioId = l.UsuarioId
         WHERE l.Avisado = 0
           AND v.StatusConexao = 'conectado'
-          AND v.TelegramUserId IS NOT NULL
+          AND v.IdentificadorCanal IS NOT NULL
           AND COALESCE(l.AvisarEm, l.Quando - INTERVAL COALESCE(cfg.AntecedenciaMin, 15) MINUTE) <= %s
         ORDER BY l.Quando
         """,
@@ -93,7 +95,8 @@ def due(agora_dt):
     out = []
     for r in rows:
         d = _map(r)
-        d["telegram_user_id"] = r["telegram_user_id"]
+        d["canal"] = r["canal"]
+        d["identificador"] = r["identificador"]
         d["voz_ativa"] = int(r["voz_ativa"])
         out.append(d)
     return out

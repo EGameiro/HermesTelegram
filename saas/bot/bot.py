@@ -305,6 +305,8 @@ def is_reminder_add(text):
         return False
     if is_reminder_cancel(text):  # cancelamento tem prioridade sobre cadastro
         return False
+    if is_reminder_recurring(text):  # recorrente tem seu próprio fluxo
+        return False
     if not any(c in low for c in _REMINDER_CUE):
         return False
     return _tem_hora(low) or _tem_dia(low)
@@ -331,6 +333,30 @@ def is_reminder_cancel(text):
         return False
     # precisa se referir a um compromisso/agenda (não a uma conta a pagar)
     return any(n in low for n in _REMINDER_NOUN)
+
+
+# Compromissos RECORRENTES (repetem em intervalos) — ex.: "de 8 em 8 horas por 5 dias".
+_RECURRING_RE = re.compile(
+    r"de\s+\d+\s+em\s+\d+"                       # de 8 em 8 (horas)
+    r"|a\s+cada\s+\d+"                           # a cada 8 horas
+    r"|\bde\s+hora\s+em\s+hora\b"
+    r"|\btod[oa]s?\s+(?:os\s+|as\s+)?(?:dias?|horas?|semanas?|mes(?:es)?|m[êe]s)\b"  # todo dia, todas as horas
+    r"|\bdiariamente\b|\bsemanal(?:mente)?\b|\bmensal(?:mente)?\b"
+    r"|\bpor\s+\d+\s+(?:dias?|vezes|semanas?)\b"  # por 5 dias, por 10 vezes
+    r"|\d+\s*x\s+(?:ao|por)\s+dia"               # 3x ao dia
+)
+
+
+def is_reminder_recurring(text):
+    """Compromisso que se repete em intervalos (ex.: 'tomar remédio de 8 em 8 horas por 5 dias')."""
+    if not REMINDERS_ENABLED:
+        return False
+    low = text.lower()
+    if not _RECURRING_RE.search(low):
+        return False
+    if any(w in low for w in ("conta", "boleto", "pagar", "r$", "reais")):  # é conta, não compromisso
+        return False
+    return any(c in low for c in _REMINDER_CUE) or any(n in low for n in _REMINDER_NOUN) or _tem_hora(low)
 
 
 def _normaliza_datahora(iso):
@@ -376,6 +402,83 @@ def extract_reminder(text, usuario_id):
     avisar_raw = data.get("avisar_em")
     avisar_em = _normaliza_datahora(str(avisar_raw)) if avisar_raw else None
     return {"descricao": desc[:150], "quando": quando, "avisar_em": avisar_em}
+
+
+_MAX_OCORRENCIAS = 90  # teto de lembretes gerados por um compromisso recorrente
+
+
+def extract_recurring_reminder(text, usuario_id):
+    """Extrai um compromisso RECORRENTE: {descricao, inicio, intervalo_horas, dias, ocorrencias}.
+    Retorna dict ou None."""
+    agora = datetime.now(ZoneInfo(TZ))
+    hoje = agora.strftime("%Y-%m-%d")
+    sys_prompt = (
+        f"Hoje é {hoje} e agora são {agora.strftime('%H:%M')} (fuso {TZ}). "
+        "Extraia um compromisso/lembrete RECORRENTE (que se repete). Responda APENAS um JSON, "
+        "sem texto extra, com as chaves: "
+        '"descricao" (string curta do que é), '
+        '"inicio" (data e hora da PRIMEIRA ocorrência, formato YYYY-MM-DDTHH:MM), '
+        '"intervalo_horas" (de quantas em quantas HORAS repete: "de 8 em 8 horas"=8, '
+        '"todo dia"/"diariamente"=24, "toda semana"=168, "de hora em hora"=1), '
+        '"dias" (por quantos DIAS dura no total, ou null) e '
+        '"ocorrencias" (por quantas VEZES repete, ou null). '
+        "Se a hora não for dita, use 08:00. Use sempre datas de hoje em diante. "
+        'Ex.: {"descricao":"Tomar remédio","inicio":"' + hoje + 'T10:00",'
+        '"intervalo_horas":8,"dias":5,"ocorrencias":null}'
+    )
+    try:
+        data = json.loads(_strip_json(llm_chat(
+            [{"role": "system", "content": sys_prompt}, {"role": "user", "content": text}],
+            temperature=0, usuario_id=usuario_id,
+        )))
+    except Exception:
+        log.exception("Falha ao extrair compromisso recorrente")
+        return None
+    desc = (data.get("descricao") or "").strip()
+    inicio = str(data.get("inicio") or "")
+    try:
+        intervalo = int(data.get("intervalo_horas") or 0)
+    except (TypeError, ValueError):
+        intervalo = 0
+    if not desc or not inicio or intervalo < 1:
+        return None
+    return {
+        "descricao": desc[:150],
+        "inicio": inicio,
+        "intervalo_horas": intervalo,
+        "dias": data.get("dias"),
+        "ocorrencias": data.get("ocorrencias"),
+    }
+
+
+def _gerar_ocorrencias(dados):
+    """Gera a lista de datas ISO (só futuras) de um compromisso recorrente. Aplica o teto."""
+    try:
+        inicio = datetime.fromisoformat(dados["inicio"])
+    except Exception:
+        return []
+    intervalo = max(1, int(dados["intervalo_horas"]))
+
+    def _int(v):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return 0
+
+    count = _int(dados.get("ocorrencias"))
+    if count <= 0 and dados.get("dias"):
+        count = _int(dados["dias"]) * 24 // intervalo
+    if count <= 0:
+        count = 1
+    count = min(count, _MAX_OCORRENCIAS)
+
+    agora = datetime.now(ZoneInfo(TZ)).replace(tzinfo=None)
+    ocorrencias = []
+    for i in range(count):
+        occ = inicio + timedelta(hours=intervalo * i)
+        if occ >= agora:  # pula ocorrências que já passaram
+            ocorrencias.append(occ.strftime("%Y-%m-%dT%H:%M"))
+    return ocorrencias
 
 
 def _fmt_datahora(iso):
@@ -820,6 +923,8 @@ def system_prompt_agora():
             "diga que 'não consegue criar lembretes' — você consegue.\n"
             "- Criar compromisso/lembrete: se faltar a DATA ou a HORA, apenas PEÇA ('Pra qual dia "
             "e horário?'). Não recuse nem mande usar outro app.\n"
+            "- Recorrente (repete em intervalos): aceite frases como 'tomar remédio de 8 em 8 horas "
+            "a partir de hoje às 10h por 5 dias' ou 'ir ao médico todo dia às 10h por 10 dias'.\n"
             "- Ver a agenda: diga que basta pedir 'quais compromissos eu tenho' (ou por período: "
             "hoje, amanhã, essa semana).\n"
             "- Contas: cadastrar = dizer descrição, valor e vencimento; ver o total = 'quanto "
@@ -1234,6 +1339,38 @@ def handle(update):
         return
     if is_reminder_list(text):
         send_message(chat_id, formatar_lista_lembretes(usuario_id, text))
+        return
+    if is_reminder_recurring(text):
+        send_typing(chat_id)
+        dados = extract_recurring_reminder(text, usuario_id)
+        if not dados:
+            send_message(
+                chat_id,
+                "Não consegui entender o compromisso recorrente. 😕\n"
+                "Tente algo como: \"tomar remédio de 8 em 8 horas a partir de hoje às 10h por 5 dias\".",
+            )
+            return
+        ocorrencias = _gerar_ocorrencias(dados)
+        if not ocorrencias:
+            send_message(chat_id, "Não consegui gerar as datas — confira o horário e a duração.")
+            return
+        for occ in ocorrencias:
+            reminders.add(usuario_id, dados["descricao"], occ, occ)  # avisa na hora de cada ocorrência
+        intervalo = dados["intervalo_horas"]
+        if intervalo == 24:
+            freq = "todo dia"
+        elif intervalo % 24 == 0:
+            freq = f"a cada {intervalo // 24} dias"
+        else:
+            freq = f"a cada {intervalo}h"
+        extra = "\n(atingiu o limite de 90 lembretes)" if len(ocorrencias) >= _MAX_OCORRENCIAS else ""
+        send_message(
+            chat_id,
+            f"✅ Criei {len(ocorrencias)} lembretes de \"{dados['descricao']}\" — {freq}.\n"
+            f"🕒 De {_fmt_datahora(ocorrencias[0])} até {_fmt_datahora(ocorrencias[-1])}.\n"
+            f"Te aviso na hora de cada um. 🔔{extra}\n"
+            "Para cancelar, veja em /lembretes.",
+        )
         return
     if is_reminder_add(text):
         send_typing(chat_id)

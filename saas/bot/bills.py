@@ -88,6 +88,15 @@ def remover(usuario_id, conta_id):
     return rc > 0
 
 
+def contar(usuario_id):
+    """Quantidade total de contas (pagas ou não)."""
+    row = db.query_one(
+        "SELECT COUNT(*) AS n FROM H01ContasPagar WHERE UsuarioId = %s",
+        (usuario_id,),
+    )
+    return int(row["n"]) if row else 0
+
+
 def vencendo(hoje_iso, hora_atual):
     """Contas de TODOS os tenants conectados, não pagas, vencidas (<= hoje), sem lembrete
     enviado, cujo horário de lembrete do tenant (HoraLembrete) já chegou.

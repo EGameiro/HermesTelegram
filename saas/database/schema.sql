@@ -137,6 +137,8 @@ CREATE TABLE IF NOT EXISTS H01Configuracoes (
   VozAtiva        TINYINT(1)  NOT NULL DEFAULT 1,
   HoraLembrete    TINYINT     NOT NULL DEFAULT 8,   -- lembrete de contas
   AntecedenciaMin INT         NOT NULL DEFAULT 15,  -- aviso de compromissos
+  LimiteCompromissos INT      NOT NULL DEFAULT 100, -- máx. de compromissos EM ABERTO
+  LimiteContas       INT      NOT NULL DEFAULT 300, -- máx. de contas (pagas ou não)
   Pin             VARCHAR(10) NULL,
   Fuso            VARCHAR(50) NOT NULL DEFAULT 'America/Sao_Paulo',
   PRIMARY KEY (UsuarioId),

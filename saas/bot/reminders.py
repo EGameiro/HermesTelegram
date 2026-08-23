@@ -101,3 +101,12 @@ def due(agora_dt):
 
 def marcar_avisado(lid):
     db.execute("UPDATE H01Compromissos SET Avisado = 1 WHERE Id = %s", (lid,))
+
+
+def contar_abertos(usuario_id):
+    """Quantidade de compromissos EM ABERTO (ainda não avisados)."""
+    row = db.query_one(
+        "SELECT COUNT(*) AS n FROM H01Compromissos WHERE UsuarioId = %s AND Avisado = 0",
+        (usuario_id,),
+    )
+    return int(row["n"]) if row else 0

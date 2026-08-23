@@ -916,6 +916,34 @@ def _gerar_vencimentos(dados):
     return [_data_venc(*_add_mes(ano, mes, intervalo * i), dia).isoformat() for i in range(count)]
 
 
+def _slots_compromissos(chat_id, usuario_id, tenant):
+    """Vagas restantes de compromissos EM ABERTO. 0 = cheio (já avisa o usuário)."""
+    limite = int(tenant.get("LimiteCompromissos", 100))
+    livres = limite - reminders.contar_abertos(usuario_id)
+    if livres <= 0:
+        send_message(
+            chat_id,
+            f"⚠️ Você atingiu o limite de {limite} compromissos em aberto. "
+            "Conclua ou cancele alguns (veja em /lembretes) e tente de novo.",
+        )
+        return 0
+    return livres
+
+
+def _slots_contas(chat_id, usuario_id, tenant):
+    """Vagas restantes de contas (pagas ou não). 0 = cheio (já avisa o usuário)."""
+    limite = int(tenant.get("LimiteContas", 300))
+    livres = limite - bills.contar(usuario_id)
+    if livres <= 0:
+        send_message(
+            chat_id,
+            f"⚠️ Você atingiu o limite de {limite} contas cadastradas. "
+            "Exclua algumas (veja em /contas) e tente de novo.",
+        )
+        return 0
+    return livres
+
+
 def _fmt_valor(v):
     if v is None:
         return "valor não informado"
@@ -1397,11 +1425,21 @@ def handle(update):
         if not vencimentos:
             send_message(chat_id, "Não consegui gerar os vencimentos — confira o dia e a duração.")
             return
+        livres = _slots_contas(chat_id, usuario_id, tenant)
+        if not livres:
+            return
+        cortou_limite = len(vencimentos) > livres
+        vencimentos = vencimentos[:livres]
         for venc in vencimentos:
             bills.add(usuario_id, dados["descricao"], dados["valor"], venc)
         intervalo = dados["intervalo_meses"]
         freq = "todo mês" if intervalo == 1 else f"a cada {intervalo} meses"
-        extra = f"\n(atingiu o limite de {_MAX_OCORRENCIAS} contas)" if len(vencimentos) >= _MAX_OCORRENCIAS else ""
+        if cortou_limite:
+            extra = "\n(criei só até o seu limite de contas)"
+        elif len(vencimentos) >= _MAX_OCORRENCIAS:
+            extra = f"\n(atingiu o limite de {_MAX_OCORRENCIAS} contas por série)"
+        else:
+            extra = ""
         send_message(
             chat_id,
             f"✅ Criei {len(vencimentos)} contas de \"{dados['descricao']}\" — {_fmt_valor(dados['valor'])}, {freq}.\n"
@@ -1434,6 +1472,8 @@ def handle(update):
                 "Pode me mandar completo?\n"
                 "Ex.: \"conta de luz de 100 reais, vence dia 25/08\".",
             )
+            return
+        if not _slots_contas(chat_id, usuario_id, tenant):
             return
         bills.add(usuario_id, dados["descricao"], dados["valor"], dados["vencimento"])
         send_message(
@@ -1475,6 +1515,11 @@ def handle(update):
         if not ocorrencias:
             send_message(chat_id, "Não consegui gerar as datas — confira o horário e a duração.")
             return
+        livres = _slots_compromissos(chat_id, usuario_id, tenant)
+        if not livres:
+            return
+        cortou_limite = len(ocorrencias) > livres
+        ocorrencias = ocorrencias[:livres]
         for occ in ocorrencias:
             reminders.add(usuario_id, dados["descricao"], occ, occ)  # avisa na hora de cada ocorrência
         intervalo = dados["intervalo_horas"]
@@ -1484,7 +1529,12 @@ def handle(update):
             freq = f"a cada {intervalo // 24} dias"
         else:
             freq = f"a cada {intervalo}h"
-        extra = f"\n(atingiu o limite de {_MAX_OCORRENCIAS} lembretes)" if len(ocorrencias) >= _MAX_OCORRENCIAS else ""
+        if cortou_limite:
+            extra = "\n(criei só até o seu limite de compromissos em aberto)"
+        elif len(ocorrencias) >= _MAX_OCORRENCIAS:
+            extra = f"\n(atingiu o limite de {_MAX_OCORRENCIAS} lembretes por série)"
+        else:
+            extra = ""
         send_message(
             chat_id,
             f"✅ Criei {len(ocorrencias)} lembretes de \"{dados['descricao']}\" — {freq}.\n"
@@ -1502,6 +1552,8 @@ def handle(update):
                 "Não consegui entender o compromisso. 😕\n"
                 "Tente algo como: \"me avise amanhã às 9h da reunião com a Adriana\".",
             )
+            return
+        if not _slots_compromissos(chat_id, usuario_id, tenant):
             return
         reminders.add(usuario_id, dados["descricao"], dados["quando"], dados.get("avisar_em"))
         if dados.get("avisar_em"):

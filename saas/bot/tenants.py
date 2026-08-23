@@ -25,6 +25,8 @@ _CONFIG_DEFAULT = {
     "VozAtiva": 1,
     "HoraLembrete": 8,
     "AntecedenciaMin": 15,
+    "LimiteCompromissos": 100,   # máx. de compromissos em aberto
+    "LimiteContas": 300,         # máx. de contas (pagas ou não)
     "Pin": None,
     "Fuso": "America/Sao_Paulo",
 }
@@ -172,7 +174,8 @@ def ensure_config(usuario_id: int):
 def get_config(usuario_id: int) -> dict:
     """Configurações do assistente (com defaults se a linha não existir ainda)."""
     row = db.query_one(
-        "SELECT Cidade, VozAtiva, HoraLembrete, AntecedenciaMin, Pin, Fuso "
+        "SELECT Cidade, VozAtiva, HoraLembrete, AntecedenciaMin, "
+        "LimiteCompromissos, LimiteContas, Pin, Fuso "
         "FROM H01Configuracoes WHERE UsuarioId = %s",
         (usuario_id,),
     )

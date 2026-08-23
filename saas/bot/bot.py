@@ -404,7 +404,7 @@ def extract_reminder(text, usuario_id):
     return {"descricao": desc[:150], "quando": quando, "avisar_em": avisar_em}
 
 
-_MAX_OCORRENCIAS = 90  # teto de lembretes gerados por um compromisso recorrente
+_MAX_OCORRENCIAS = 30  # teto de lembretes gerados por um compromisso recorrente
 
 
 def extract_recurring_reminder(text, usuario_id):
@@ -1363,7 +1363,7 @@ def handle(update):
             freq = f"a cada {intervalo // 24} dias"
         else:
             freq = f"a cada {intervalo}h"
-        extra = "\n(atingiu o limite de 90 lembretes)" if len(ocorrencias) >= _MAX_OCORRENCIAS else ""
+        extra = f"\n(atingiu o limite de {_MAX_OCORRENCIAS} lembretes)" if len(ocorrencias) >= _MAX_OCORRENCIAS else ""
         send_message(
             chat_id,
             f"✅ Criei {len(ocorrencias)} lembretes de \"{dados['descricao']}\" — {freq}.\n"

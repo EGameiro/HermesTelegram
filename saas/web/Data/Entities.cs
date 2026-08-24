@@ -128,5 +128,20 @@ public class Compromisso
     public string Descricao { get; set; } = string.Empty;
     public DateTime Quando { get; set; }
     public bool Avisado { get; set; }
+    public string? GoogleEventId { get; set; }       // id do evento espelhado na Google Agenda
     public DateTime CriadoEm { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>Conexão com a Google Agenda (1:1 com o usuário). PK = UsuarioId. O painel
+/// faz o OAuth e guarda o RefreshToken; o bot usa p/ espelhar os compromissos.</summary>
+public class GoogleAgenda
+{
+    public long UsuarioId { get; set; }
+    public string? RefreshToken { get; set; }
+    public string? CalendarId { get; set; }          // 'primary' ou id/e-mail da agenda escolhida
+    public string? CalendarNome { get; set; }        // nome amigável (exibição)
+    public string? GoogleEmail { get; set; }         // conta Google conectada (exibição)
+    public string StatusConexao { get; set; } = "desconectado"; // conectado|desconectado
+    public DateTime? ConectadoEm { get; set; }
+    public DateTime? AtualizadoEm { get; set; }
 }

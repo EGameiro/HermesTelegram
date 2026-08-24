@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS H01Compromissos (
   Quando      DATETIME     NOT NULL,
   AvisarEm    DATETIME     NULL,       -- horário explícito do lembrete (NULL = usar AntecedenciaMin do usuário)
   Avisado     TINYINT(1)   NOT NULL DEFAULT 0,
+  GoogleEventId VARCHAR(255) NULL,     -- id do evento espelhado na Google Agenda (NULL = não espelhado)
   CriadoEm    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (Id),
   KEY IX_H01Compromissos_Usuario_Quando (UsuarioId, Quando),
@@ -195,6 +196,25 @@ CREATE TABLE IF NOT EXISTS H01HistoricoConversa (
   PRIMARY KEY (Id),
   KEY IX_H01Historico_Usuario (UsuarioId, CriadoEm),
   CONSTRAINT FK_H01Historico_Usuario FOREIGN KEY (UsuarioId)
+    REFERENCES H01Usuarios(Id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ----------------------------------------------------------------------------
+-- 11) Integração com a Google Agenda (1:1 por usuário). O painel faz o OAuth e
+--     guarda o RefreshToken; o bot usa p/ espelhar os compromissos como eventos.
+--     CalendarId = agenda escolhida pelo usuário ('primary' ou o id/e-mail da agenda).
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS H01GoogleAgenda (
+  UsuarioId     BIGINT       NOT NULL,
+  RefreshToken  VARCHAR(512) NULL,                          -- token OAuth de atualização (Google)
+  CalendarId    VARCHAR(255) NULL,                          -- agenda alvo ('primary' por padrão)
+  CalendarNome  VARCHAR(200) NULL,                          -- nome amigável (exibição no painel)
+  GoogleEmail   VARCHAR(200) NULL,                          -- conta Google conectada (exibição)
+  StatusConexao VARCHAR(20)  NOT NULL DEFAULT 'desconectado', -- conectado|desconectado
+  ConectadoEm   DATETIME     NULL,
+  AtualizadoEm  DATETIME     NULL,
+  PRIMARY KEY (UsuarioId),
+  CONSTRAINT FK_H01GoogleAgenda_Usuario FOREIGN KEY (UsuarioId)
     REFERENCES H01Usuarios(Id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 

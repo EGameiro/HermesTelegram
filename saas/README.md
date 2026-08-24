@@ -86,6 +86,28 @@ no WhatsApp (`wa.me?text=<token>`) e o núcleo reconhece e vincula. Página: `Pa
   `type`/`messageType`/`mediaType` (áudio = `audio`/`ptt`/`voice`); id em `id`/`messageid`.
   Ignora `fromMe`/`wasSentByApi`/`isGroup`. A instância pode não mandar URL direta → baixar por id.
 
+## Integração com a Google Agenda (espelhamento de compromissos)
+
+Mão única (**Hermes → Google**): todo compromisso agendado no bot vira um **evento** na
+agenda Google do usuário. **Um evento por ocorrência** (recorrentes viram N eventos).
+
+- **Painel** faz o **OAuth** (`Services/GoogleService.cs`, páginas `Pages/Google/Conectar` e
+  `Pages/Google/Callback`): o usuário conecta a conta Google, o painel guarda o **RefreshToken**
+  em `H01GoogleAgenda` e lista as agendas p/ ele **escolher** qual o Hermes alimenta (`CalendarId`).
+  Escopos: `calendar.events` + `calendar.calendarlist.readonly` + `openid email`.
+- **Bot** (`bot/gcal.py`): ao salvar um compromisso, troca o RefreshToken por um access token
+  (cacheado) e cria o evento via Calendar API; guarda o `GoogleEventId` na linha do compromisso
+  (`H01Compromissos.GoogleEventId`) p/ apagar no Google quando o usuário cancela. O espelhamento
+  roda em **background thread** (não trava a resposta) e é **best-effort**: se o usuário não
+  conectou, se o token foi revogado ou a API falhar, o Hermes segue normal (o lembrete pelo
+  WhatsApp acontece do mesmo jeito).
+- **Config (OAuth Client tipo Web, um só p/ painel e bot):** `Google__ClientId`/`Google__ClientSecret`
+  no painel; `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` no bot. Redirect URI autorizado:
+  `https://hermes.digiplay.net.br/Google/Callback` (+ `http://localhost:5034/Google/Callback` p/ dev).
+  Enquanto o app OAuth estiver em **"Testing"**, funciona p/ até 100 test users sem verificação do Google.
+- **Migração:** `database/migration_google_agenda.sql` (cria `H01GoogleAgenda` + coluna
+  `GoogleEventId`). Rodar UMA vez antes de redeployar; idempotente.
+
 ## O banco (schema.sql)
 Cada **usuário é um tenant**. Toda tabela de domínio tem `UsuarioId`, e toda query
 **deve** filtrar por ele (isolamento — padrão `HasQueryFilter` do FaceRenew).
@@ -93,7 +115,7 @@ Cada **usuário é um tenant**. Toda tabela de domínio tem `UsuarioId`, e toda 
 Tabelas (todas com prefixo **`H01`**):
 `H01Usuarios`, **`H01Vinculos`** (vínculo de canal: `Canal`+`IdentificadorCanal`), `H01Planos`,
 `H01Assinaturas`, `H01Pagamentos`, `H01UsoMensal`, `H01Configuracoes`, `H01ContasPagar`,
-`H01Compromissos`, `H01HistoricoConversa`.
+`H01Compromissos`, `H01HistoricoConversa`, **`H01GoogleAgenda`** (conexão com a Google Agenda).
 
 > **Nota histórica:** a tabela `H01TelegramVinculos` foi substituída pela genérica `H01Vinculos`
 > por [`database/migration_vinculos.sql`](database/migration_vinculos.sql) (já executada em
@@ -150,7 +172,8 @@ O `DatabaseSeeder` aplica a migration do Identity no startup e cria as roles + o
   (arquivo `saas/web/Dockerfile`, **context `saas/web`**).
 - **Environment:** `ASPNETCORE_ENVIRONMENT=Production`,
   `ConnectionStrings__DefaultConnection=Server=mysql8001.site4now.net;Port=3306;Database=db_a43aea_hermes;User=a43aea_hermes;Password=***;AllowPublicKeyRetrieval=True;SslMode=None`,
-  `AdminSeed__Senha=***`, `WhatsApp__BotNumber=<número do bot, só dígitos>`.
+  `AdminSeed__Senha=***`, `WhatsApp__BotNumber=<número do bot, só dígitos>`,
+  `Google__ClientId=***`, `Google__ClientSecret=***` (integração Google Agenda).
 - **Domains:** Container Port **8080** + um domínio (gerado via traefik.me/sslip.io ou próprio) → o
   **Traefik faz o HTTPS**.
 - **Advanced → Volumes:** montar volume em **`/app/dp-keys`** (chaves de login estáveis entre redeploys).
@@ -169,7 +192,8 @@ O `DatabaseSeeder` aplica a migration do Identity no startup e cria as roles + o
 - **Environment:** `MYSQL_HOST`/`PORT`/`DB`/`USER`/`PASSWORD` (mesmo banco do painel);
   `LLM_PROVIDER=groq`, `GROQ_API_KEY=***`, `GROQ_MODEL=openai/gpt-oss-120b`; `OPENAI_API_KEY=***`
   (voz); `TZ=America/Sao_Paulo`; **`UAZAPI_BASE_URL`, `UAZAPI_TOKEN`** (obrigatórias — sem elas o
-  bot não sobe). `WA_DEBUG=1` só p/ diagnóstico.
+  bot não sobe); `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (opcionais — espelhamento na Google
+  Agenda). `WA_DEBUG=1` só p/ diagnóstico.
 - **Domain (webhook do WhatsApp):** o webhook precisa de um **Domain** → Service Name `bot`,
   Container Port **8080**. Domínio real **`hermesbot.digiplay.net.br`** (registro A no SmartASP DNS
   → `75.119.139.224`). ⚠️ **sslip.io não tem HTTPS válido** (Traefik faz 301→https sem cert) — use

@@ -55,6 +55,23 @@ def listar_periodo(usuario_id, ini_date_iso, fim_date_iso):
     return [_map(r) for r in rows]
 
 
+def set_google_event(lid, google_event_id):
+    """Guarda o id do evento espelhado na Google Agenda para este compromisso."""
+    db.execute(
+        "UPDATE H01Compromissos SET GoogleEventId = %s WHERE Id = %s",
+        (google_event_id, lid),
+    )
+
+
+def google_event_id(usuario_id, lid):
+    """Id do evento no Google deste compromisso (ou None)."""
+    row = db.query_one(
+        "SELECT GoogleEventId FROM H01Compromissos WHERE Id = %s AND UsuarioId = %s",
+        (lid, usuario_id),
+    )
+    return (row or {}).get("GoogleEventId")
+
+
 def remover(usuario_id, lid):
     _, rc = db.execute(
         "DELETE FROM H01Compromissos WHERE Id = %s AND UsuarioId = %s",

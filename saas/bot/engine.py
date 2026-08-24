@@ -21,6 +21,7 @@ import weather
 import websearch
 import bills
 import reminders
+import gcal
 import tenants
 import usage
 import channels.base as channels
@@ -731,6 +732,7 @@ def cancelar_compromisso_por_texto(usuario_id, text):
         mid = re.search(r"\b(\d{1,6})\b", low)
     if mid and int(mid.group(1)) in por_id:
         alvo = por_id[int(mid.group(1))]
+        _apagar_do_google(usuario_id, alvo["id"])
         reminders.remover(usuario_id, alvo["id"])
         return f"🗑️ Compromisso cancelado: {alvo['descricao']} — {_fmt_datahora(alvo['quando'])}."
 
@@ -754,6 +756,7 @@ def cancelar_compromisso_por_texto(usuario_id, text):
         alvo = candidatos[0]
 
     if alvo:
+        _apagar_do_google(usuario_id, alvo["id"])
         reminders.remover(usuario_id, alvo["id"])
         return f"🗑️ Compromisso cancelado: {alvo['descricao']} — {_fmt_datahora(alvo['quando'])}."
 
@@ -857,6 +860,40 @@ def _slots_contas(ctx, usuario_id, tenant):
             "Exclua algumas (veja em /contas) e tente de novo.")
         return 0
     return livres
+
+
+def _espelhar_no_google(tenant, usuario_id, itens):
+    """Cria os compromissos como eventos na Google Agenda, em BACKGROUND (não trava a
+    resposta ao usuário). `itens` = lista de (lid, descricao, quando_iso). Best-effort."""
+    if not config.GCAL_ENABLED:
+        return
+    itens = [t for t in itens if t[0]]  # descarta lid None (insert falhou)
+    if not itens:
+        return
+    tz = tenant.get("Fuso") or config.TZ
+
+    def _run():
+        for lid, descricao, quando_iso in itens:
+            try:
+                gid = gcal.criar_evento(usuario_id, descricao, quando_iso, tz=tz)
+                if gid:
+                    reminders.set_google_event(lid, gid)
+            except Exception:
+                log.exception("Falha ao espelhar compromisso no Google (segue local)")
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def _apagar_do_google(usuario_id, lid):
+    """Apaga o evento espelhado no Google (best-effort). Chamar ANTES de remover a linha."""
+    if not config.GCAL_ENABLED:
+        return
+    try:
+        gid = reminders.google_event_id(usuario_id, lid)
+        if gid:
+            gcal.apagar_evento(usuario_id, gid)
+    except Exception:
+        log.exception("Falha ao apagar evento no Google (segue local)")
 
 
 def help_text(tenant):
@@ -1168,6 +1205,7 @@ def processar(inbound: channels.Inbound, sender: channels.Sender):
         if not arg.isdigit():
             ctx.reply("Use: /cancelar <número do lembrete>. Veja em /lembretes.")
             return
+        _apagar_do_google(usuario_id, int(arg))
         ok = reminders.remover(usuario_id, int(arg))
         ctx.reply("🗑️ Lembrete cancelado." if ok else "Não achei um lembrete com esse número.")
         return
@@ -1194,8 +1232,11 @@ def processar(inbound: channels.Inbound, sender: channels.Sender):
             return
         cortou_limite = len(ocorrencias) > livres
         ocorrencias = ocorrencias[:livres]
+        espelhar = []
         for occ in ocorrencias:
-            reminders.add(usuario_id, dados["descricao"], occ, occ)
+            lid = reminders.add(usuario_id, dados["descricao"], occ, occ)
+            espelhar.append((lid, dados["descricao"], occ))
+        _espelhar_no_google(tenant, usuario_id, espelhar)
         intervalo = dados["intervalo_horas"]
         if intervalo == 24:
             freq = "todo dia"
@@ -1225,7 +1266,8 @@ def processar(inbound: channels.Inbound, sender: channels.Sender):
             return
         if not _slots_compromissos(ctx, usuario_id, tenant):
             return
-        reminders.add(usuario_id, dados["descricao"], dados["quando"], dados.get("avisar_em"))
+        lid = reminders.add(usuario_id, dados["descricao"], dados["quando"], dados.get("avisar_em"))
+        _espelhar_no_google(tenant, usuario_id, [(lid, dados["descricao"], dados["quando"])])
         if dados.get("avisar_em"):
             aviso_txt = f"Te aviso em {_fmt_datahora(dados['avisar_em'])}."
         else:

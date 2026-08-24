@@ -1,0 +1,85 @@
+@page
+@model HermesSaaS.Web.Pages.Google.ConectarModel
+@{
+    ViewData["Title"] = "Conectar Google Agenda";
+}
+<h4 class="mb-4"><i class="bi bi-calendar-check text-hermes"></i> Conectar a Google Agenda</h4>
+
+@if (!Model.Configurado)
+{
+    <div class="alert alert-warning" style="max-width: 640px;">
+        A integração com o Google ainda não foi configurada pelo administrador.
+    </div>
+}
+else if (!Model.Conectado)
+{
+    <div class="card p-4" style="max-width: 640px;">
+        <p class="mb-2">Conecte sua conta Google e o Hermes vai lançar <strong>automaticamente</strong> na sua agenda todo compromisso que você marcar por aqui — por texto ou voz no WhatsApp.</p>
+        <ul class="text-muted small mb-3">
+            <li>É de mão única: os compromissos vão do Hermes para o Google.</li>
+            <li>Você escolhe em qual agenda os eventos entram.</li>
+            <li>Pode desconectar quando quiser.</li>
+        </ul>
+        <form method="post" asp-page-handler="Conectar">
+            <button class="btn btn-hermes" type="submit">
+                <i class="bi bi-google"></i> Conectar com o Google
+            </button>
+        </form>
+    </div>
+}
+else
+{
+    <div class="card p-4" style="max-width: 640px;">
+        <h5 class="text-success mb-1"><i class="bi bi-check-circle-fill"></i> Google conectado</h5>
+        @if (!string.IsNullOrEmpty(Model.Conta?.GoogleEmail))
+        {
+            <p class="text-muted small mb-3">Conta: <strong>@Model.Conta!.GoogleEmail</strong></p>
+        }
+
+        @if (Model.FalhaAoListar)
+        {
+            <div class="alert alert-warning">
+                Não consegui acessar suas agendas agora (a autorização pode ter sido revogada).
+                <form method="post" asp-page-handler="Conectar" class="mt-2">
+                    <button class="btn btn-sm btn-hermes" type="submit">Reconectar</button>
+                </form>
+            </div>
+        }
+        else
+        {
+            <label class="form-label small text-muted text-uppercase mb-2">Agenda onde o Hermes vai lançar</label>
+            <form method="post" asp-page-handler="Selecionar" class="d-flex gap-2 align-items-center flex-wrap">
+                <select name="calendarId" id="calSel" class="form-select" style="max-width: 360px;"
+                        onchange="document.getElementById('calNome').value = this.options[this.selectedIndex].text;">
+                    @foreach (var c in Model.Agendas)
+                    {
+                        var sel = c.Id == Model.Conta?.CalendarId;
+                        <option value="@c.Id" selected="@sel">@c.Nome@(c.Primary ? " (principal)" : "")</option>
+                    }
+                </select>
+                <input type="hidden" name="calendarNome" id="calNome" value="@(Model.Conta?.CalendarNome)" />
+                <button class="btn btn-hermes" type="submit">Salvar agenda</button>
+            </form>
+            <p class="text-muted small mt-2 mb-0">
+                Atual: <strong>@(Model.Conta?.CalendarNome ?? "Agenda principal")</strong>.
+                Novos compromissos entram nela; os já criados ficam onde estão.
+            </p>
+        }
+
+        <hr class="my-3" />
+        <form method="post" asp-page-handler="Desconectar"
+              onsubmit="return confirm('Desconectar o Google? Os compromissos deixam de ser espelhados.');">
+            <button class="btn btn-outline-danger btn-sm" type="submit">Desconectar Google</button>
+        </form>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        // Garante que o campo oculto do nome comece coerente com a opção selecionada.
+        (function () {
+            var sel = document.getElementById('calSel');
+            if (sel) document.getElementById('calNome').value = sel.options[sel.selectedIndex].text;
+        })();
+    </script>
+}

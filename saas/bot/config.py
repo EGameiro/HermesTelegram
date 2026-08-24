@@ -59,6 +59,12 @@ REMINDER_VOICE = os.environ.get("REMINDER_VOICE", "true").lower() != "false"  # 
 
 TIMING = os.environ.get("HERMES_TIMING", "").lower() in ("1", "true", "yes")
 
+# --- Google Agenda (espelha compromissos como eventos) ----------------------
+# ClientId/Secret do OAuth (mesmo app do painel). Vazios = espelhamento desligado.
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+GCAL_ENABLED = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
+
 
 def agora_local():
     """Data/hora atual no fuso configurado (aware)."""

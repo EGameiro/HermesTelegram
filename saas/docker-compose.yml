@@ -25,5 +25,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - REMINDER_VOICE=${REMINDER_VOICE:-true}
       - OPENAI_TTS_VOICE=${OPENAI_TTS_VOICE:-nova}
+      # --- Google Agenda (espelha compromissos). Vazio = desligado. ---
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       # --- Fuso p/ data/hora e varredura de lembretes ---
       - TZ=${TZ:-America/Sao_Paulo}

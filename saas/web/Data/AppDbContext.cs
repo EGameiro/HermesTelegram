@@ -24,6 +24,7 @@ public class AppDbContext : IdentityDbContext<AppUser>
     public DbSet<Configuracao> Configuracoes => Set<Configuracao>();
     public DbSet<ContaPagar> ContasPagar => Set<ContaPagar>();
     public DbSet<Compromisso> Compromissos => Set<Compromisso>();
+    public DbSet<GoogleAgenda> GoogleAgendas => Set<GoogleAgenda>();
 
     /// <summary>UsuarioId (tenant) do usuário logado, lido do claim. 0 = não autenticado
     /// (garante que os HasQueryFilter não vazem dados entre sessões).</summary>
@@ -137,7 +138,21 @@ public class AppDbContext : IdentityDbContext<AppUser>
             e.ToTable("H01Compromissos", t => t.ExcludeFromMigrations());
             e.HasKey(c => c.Id);
             e.Property(c => c.Descricao).HasMaxLength(200).IsRequired();
+            e.Property(c => c.GoogleEventId).HasMaxLength(255);
             e.HasQueryFilter(c => c.UsuarioId == GetCurrentUsuarioId());
+        });
+
+        b.Entity<GoogleAgenda>(e =>
+        {
+            e.ToTable("H01GoogleAgenda", t => t.ExcludeFromMigrations());
+            e.HasKey(g => g.UsuarioId);
+            e.Property(g => g.UsuarioId).ValueGeneratedNever();
+            e.Property(g => g.RefreshToken).HasMaxLength(512);
+            e.Property(g => g.CalendarId).HasMaxLength(255);
+            e.Property(g => g.CalendarNome).HasMaxLength(200);
+            e.Property(g => g.GoogleEmail).HasMaxLength(200);
+            e.Property(g => g.StatusConexao).HasMaxLength(20);
+            e.HasQueryFilter(g => g.UsuarioId == GetCurrentUsuarioId());
         });
     }
 }

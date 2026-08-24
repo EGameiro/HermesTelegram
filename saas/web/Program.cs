@@ -52,6 +52,8 @@ builder.Services.ConfigureApplicationCookie(o =>
 
 builder.Services.AddScoped<OnboardingService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<GoogleService>();
 
 // Persiste as chaves de DataProtection em disco. No host shared (sem user profile/HKLM)
 // elas ficariam só em memória → cookie de login e token antiforgery quebram a cada

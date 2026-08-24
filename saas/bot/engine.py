@@ -192,10 +192,19 @@ def is_bill_add(text):
     return tem_dinheiro and any(ch.isdigit() for ch in low)
 
 
-_BILL_PAY_RE = re.compile(r"\b(paguei|paga|pago|pagas|pagos|quitei|quitar|quitad[ao]|baixei|baixa)\b")
+# Verbos de pagamento (inclui infinitivo/imperativo "pagar"/"pague" e "liquidar").
+_BILL_PAY_RE = re.compile(
+    r"\b(paguei|pague|pagar|paga|pago|pagas|pagos|"
+    r"quitei|quitar|quitad[ao]|liquidei|liquidar|liquidad[ao]|baixei|baixa)\b")
+# Formas INEQUÍVOCAS de "já paga" (passado / "está paga"): sempre pagamento, mesmo com valor.
+_BILL_PAY_PAST_RE = re.compile(
+    r"\b(paguei|quitei|quitad[ao]|liquidei|liquidad[ao]|baixei)\b"
+    r"|est[áa]\s+pag[ao]|t[áa]\s+pag[ao]|foi\s+pag[ao]")
+# "pra/para/a pagar" = listagem/genérico ("o que tenho pra pagar"), NÃO é marcar como paga.
+_BILL_PAY_NOT = re.compile(r"\b(?:pra|para|a)\s+pagar\b")
 _STOP_PAGA = {"com", "para", "pra", "pro", "dia", "das", "dos", "uma", "meu", "minha", "meus",
               "minhas", "que", "esse", "essa", "como", "conta", "contas", "paga", "pago", "pagar",
-              "paguei", "quitei", "marca", "marcar", "the"}
+              "paguei", "quitei", "liquidei", "marca", "marcar", "the"}
 
 
 def is_bill_pay(text):
@@ -205,6 +214,13 @@ def is_bill_pay(text):
     if not _BILL_PAY_RE.search(low):
         return False
     if any(q in low for q in ("quanto", "quais", "quantas", "quantos")):
+        return False
+    # Passado / "está paga" é inequívoco.
+    if _BILL_PAY_PAST_RE.search(low):
+        return True
+    # Ambíguas (pagar/pague/paga): não é pagamento se for listagem ("pra pagar")
+    # nem cadastro de conta nova (traz valor em reais).
+    if _BILL_PAY_NOT.search(low) or "reais" in low or "r$" in low:
         return False
     return True
 

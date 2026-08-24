@@ -98,40 +98,48 @@ class WhatsAppSender(channels.Sender):
         return None
 
     def _download_por_id(self, mid):
-        """Chama o endpoint de download do UAZAPI e devolve (bytes, filename, mime) ou None.
-        Trata resposta com base64 OU com uma URL de arquivo; cai p/ o endpoint legado."""
+        """POST /message/download (contrato UAZAPI): body {id, return_base64}. Resposta traz
+        base64Data e/ou fileURL + mimetype. Devolve (bytes, filename, mime) ou None."""
         headers = {"token": TOKEN, "Content-Type": "application/json"}
-        tentativas = [
-            ("POST", f"{BASE}/message/download", {"json": {"id": mid}}),
-            ("GET",  f"{BASE}/downloadMedia",    {"params": {"id": mid}}),  # legado
-        ]
-        for metodo, url, kw in tentativas:
+        try:
+            r = requests.post(
+                f"{BASE}/message/download",
+                headers=headers,
+                json={"id": mid, "return_base64": True},
+                timeout=90,
+            )
+            r.raise_for_status()
+            data = r.json()
+        except Exception:
+            log.warning("Falha no POST /message/download (id=%s)", mid, exc_info=True)
+            return None
+
+        mime = data.get("mimetype") or data.get("mimeType") or "audio/ogg"
+        fname = "audio.mp3" if ("mpeg" in mime or "mp3" in mime) else "audio.ogg"
+
+        # base64Data é o campo documentado (aceita variações por segurança).
+        b64 = data.get("base64Data") or data.get("base64") or data.get("data") or ""
+        if isinstance(b64, str) and b64:
+            if "," in b64:
+                b64 = b64.split(",", 1)[1]
             try:
-                r = requests.request(metodo, url, headers=headers, timeout=60, **kw)
-                r.raise_for_status()
-                # resposta pode ser JSON (base64 ou fileURL) ou os próprios bytes
-                ctype = r.headers.get("content-type", "")
-                if "application/json" not in ctype:
-                    if r.content:
-                        return r.content, "audio.ogg", "audio/ogg"
-                    continue
-                data = r.json()
-                mime = data.get("mimetype") or data.get("mimeType") or "audio/ogg"
-                b64 = data.get("base64") or data.get("data") or data.get("fileBase64") or ""
-                if isinstance(b64, str) and b64:
-                    if "," in b64:
-                        b64 = b64.split(",", 1)[1]
-                    return base64.b64decode(b64), "audio.ogg", mime
-                furl = (data.get("fileURL") or data.get("fileUrl") or data.get("url")
-                        or data.get("mediaUrl"))
-                if isinstance(furl, str) and furl.startswith("http"):
-                    rr = requests.get(furl, timeout=60)
-                    rr.raise_for_status()
-                    return rr.content, "audio.ogg", mime
-                log.warning("Download UAZAPI (%s) sem base64/URL utilizável: chaves=%s",
-                            url, list(data.keys()))
+                return base64.b64decode(b64), fname, mime
             except Exception:
-                log.warning("Falha no download de áudio via %s %s", metodo, url, exc_info=True)
+                log.warning("base64Data inválido no download (id=%s)", mid)
+
+        # fallback: URL pública do arquivo
+        furl = data.get("fileURL") or data.get("fileUrl") or data.get("url")
+        if isinstance(furl, str) and furl.startswith("http"):
+            try:
+                rr = requests.get(furl, timeout=90)
+                rr.raise_for_status()
+                return rr.content, fname, mime
+            except Exception:
+                log.warning("Falha ao baixar fileURL do UAZAPI (id=%s)", mid, exc_info=True)
+
+        log.warning("Download UAZAPI sem base64Data/fileURL utilizável (id=%s): chaves=%s",
+                    mid, list(data.keys()))
+        return None
         return None
 
 

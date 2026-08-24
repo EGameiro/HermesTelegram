@@ -1,7 +1,12 @@
-# Hermes SaaS — Desenvolvimento (Fase 1)
+# Hermes SaaS — bot multi-tenant e multi-canal (Telegram + WhatsApp)
 
-Transformação do bot single-tenant em **SaaS multi-tenant**. Ver a especificação
-completa em [`../ESPECIFICACAO_SAAS.md`](../ESPECIFICACAO_SAAS.md).
+SaaS onde **cada usuário é um tenant**, atendido por um bot único em **Telegram e WhatsApp**
+(mesmo cérebro), com painel web em ASP.NET Core. **No ar e validado em runtime.** Ver a
+especificação completa em [`../ESPECIFICACAO_SAAS.md`](../ESPECIFICACAO_SAAS.md).
+
+> **Estado (23/08/2026):** multi-canal completo — recebe e envia **texto e voz** nos dois
+> canais, multi-tenant, num processo único. Contas a pagar, compromissos, recorrentes,
+> consultas e lembretes falados funcionam em Telegram e WhatsApp.
 
 ## Estrutura
 
@@ -28,19 +33,20 @@ saas/
 │   ├── websearch.py      ← busca na web (DuckDuckGo) — reaproveitado
 │   └── Dockerfile        ← imagem do bot (python:3.12-slim) p/ o VPS
 ├── docker-compose.yml    ← compose do bot SaaS (só o bot; LLM via Groq; MySQL externo)
-├── .env.example          ← variáveis (Telegram, MySQL, LLM, voz)
+├── .env.example          ← variáveis (Telegram, WhatsApp/UAZAPI, MySQL, LLM, voz)
 └── web/                  ← painel ASP.NET Core Razor (Etapa 3 — NO AR no VPS)
     ├── Data/             ← AppUser, AppDbContext (H01* ExcludeFromMigrations), entidades,
     │                        CustomClaimsFactory, DatabaseSeeder, Migrations (só AspNet*)
     ├── Services/         ← OnboardingService (cadastro + token de vínculo), EmailService, BrTime
     ├── Pages/            ← Login (+Esqueci/Redefinir senha), Cadastro, Dashboard, Contas,
-    │                        Compromissos, Telegram/Conectar, Conta/Configuracoes, Conta
-    │                        (senha/cancelar/LGPD), Faturas, Admin/Clientes
+    │                        Compromissos, Telegram/Conectar, WhatsApp/Conectar,
+    │                        Conta/Configuracoes, Conta (senha/cancelar/LGPD), Faturas, Admin/Clientes
     └── Dockerfile        ← imagem do painel (Kestrel :8080) p/ o VPS
 ```
 
 ## Decisões (da especificação)
-- **Modelo A** (bot único): identidade pelo `TelegramUserId` (chat_id).
+- **Modelo A** (bot único): identidade pelo canal autenticado — `TelegramUserId` (Telegram)
+  ou telefone (WhatsApp). Um usuário pode conectar **os dois canais**.
 - Banco **MySQL 8** (mesmo do FaceRenew).
 - Painel em **ASP.NET Core Razor**.
 - Pagamento **manual** na fase de teste (ativação pelo admin).
@@ -75,34 +81,48 @@ agendador faz JOIN nela e entrega em cada canal conectado. **Migração:** rodar
 (deep-link `t.me`); no WhatsApp o cliente **envia só o código** ao bot (`wa.me?text=<token>`) e
 o núcleo reconhece e vincula. Páginas: `Pages/Telegram/Conectar` e `Pages/WhatsApp/Conectar`.
 
-**Voz no WhatsApp:** áudio RECEBIDO é baixado (URL do webhook ou `GET /downloadMedia?id=`) e
-transcrito por Whisper. Áudio ENVIADO (lembrete falado) ainda **não** tem contrato UAZAPI
-provado → cai para **texto** (fallback do engine). Ligar TTS no WhatsApp é follow-up.
+**Contrato UAZAPI (WhatsApp), validado em runtime:**
+- **Enviar texto:** `POST {BASE}/send/text` header `token`, body `{number, text}`.
+- **Enviar voz (lembrete falado):** `POST {BASE}/send/media` body `{number, type:"ptt",
+  file:"data:audio/ogg;base64,<b64>"}` — `ptt` = nota de voz (microfone). O TTS já gera OGG/Opus.
+  Nota de voz não leva legenda → a legenda vai como texto separado.
+- **Baixar áudio recebido:** `POST {BASE}/message/download` body `{id, return_base64:true}` →
+  resposta com **`base64Data`** (não `base64`), `fileURL`, `mimetype`. Os bytes são transcritos
+  pelo Whisper (`voice.transcrever`, mesmo caminho do Telegram). *(O `GET /downloadMedia` do
+  Agente Clínica é de uma versão antiga do UAZAPI e dá 404 nesta.)*
+- **Webhook:** evento em `EventType=messages`, mensagem em `payload["message"]`; remetente em
+  `sender_pn` (telefone real; `sender`=@lid, não usar); texto em `text`/`content`; tipo em
+  `type`/`messageType`/`mediaType` (áudio = `audio`/`ptt`/`voice`); id em `id`/`messageid`.
+  Ignora `fromMe`/`wasSentByApi`/`isGroup`. A instância pode não mandar URL direta → baixar por id.
 
-**Deploy da Fase 2 (bot + painel juntos):**
-1. MySQL 8: rodar `database/migration_vinculos.sql`.
-2. Redeploy do **painel** e do **bot** (ambos passam a usar `H01Vinculos`).
-3. Para ligar o WhatsApp: criar/usar uma instância UAZAPI, setar `UAZAPI_BASE_URL`/`UAZAPI_TOKEN`
-   no bot + mapear domínio → porta 8080, apontar o webhook do UAZAPI p/ `https://<dominio>/webhook`,
-   e setar `WhatsApp:BotNumber` (número do bot) no painel.
+**Deploy do multi-canal — FEITO (23/08/2026):** ver a seção **"Deploy no VPS Dokploy"**.
+Resumo: rodar `database/migration_vinculos.sql`; redeploy do **painel** e do **bot** juntos
+(ambos usam `H01Vinculos`); no **bot** setar `UAZAPI_BASE_URL`/`UAZAPI_TOKEN` + adicionar um
+**Domain** (porta 8080) → webhook do UAZAPI = `https://<dominio-do-bot>/webhook`; no **painel**
+setar `WhatsApp__BotNumber`.
 
 ## O banco (schema.sql)
 Cada **usuário é um tenant**. Toda tabela de domínio tem `UsuarioId`, e toda query
 **deve** filtrar por ele (isolamento — padrão `HasQueryFilter` do FaceRenew).
 
 Tabelas (todas com prefixo **`H01`**):
-`H01Usuarios`, `H01TelegramVinculos`, `H01Planos`, `H01Assinaturas`, `H01Pagamentos`,
-`H01UsoMensal`, `H01Configuracoes`, `H01ContasPagar`, `H01Compromissos`, `H01HistoricoConversa`.
+`H01Usuarios`, **`H01Vinculos`** (vínculo de canal: `Canal`+`IdentificadorCanal`), `H01Planos`,
+`H01Assinaturas`, `H01Pagamentos`, `H01UsoMensal`, `H01Configuracoes`, `H01ContasPagar`,
+`H01Compromissos`, `H01HistoricoConversa`.
+
+> A tabela antiga `H01TelegramVinculos` foi substituída por `H01Vinculos`. Em bancos já
+> existentes, rodar [`database/migration_vinculos.sql`](database/migration_vinculos.sql) (cria a
+> nova e migra os vínculos de Telegram; mantém a antiga como backup).
 
 Aplicar (num MySQL 8):
 ```bash
 mysql -u <user> -p < database/schema.sql
 ```
 
-## Ordem de construção (Fase 1)
+## Ordem de construção (histórico)
 1. ✅ **Schema MySQL** (`database/schema.sql`) — feito.
 2. ✅ **Refatorar o bot p/ multi-tenant** (`bot/`) — feito. Ao receber mensagem, resolve o
-   tenant por `TelegramUserId`; escopa contas/compromissos/config por `UsuarioId`; mede uso
+   tenant pela identidade do canal; escopa contas/compromissos/config por `UsuarioId`; mede uso
    (tokens/voz/TTS/mensagens) em `H01UsoMensal`; aplica o **limite de voz** do plano.
 3. ✅ **Painel web (.NET)** (`web/`) — login/cadastro (Identity), multi-tenancy por `UsuarioId`
    (claim + `HasQueryFilter`, padrão FaceRenew), onboarding com **token de vínculo**, dashboard
@@ -113,7 +133,8 @@ mysql -u <user> -p < database/schema.sql
 4. ✅ **Fluxo de onboarding ponta a ponta** — funcionando: site gera token → `/start <token>` no bot →
    vínculo criado → bot atende como aquele tenant. **Painel e bot NO AR no VPS Dokploy**
    (ver "Deploy no VPS Dokploy"). Pendências menores: reset de senha por SMTP; botão "Desconectar"
-   Telegram no painel (hoje desconecta-se limpando `H01TelegramVinculos` no banco).
+   no painel (hoje desconecta-se via `UPDATE H01Vinculos SET IdentificadorCanal=NULL,
+   StatusConexao='pendente' WHERE UsuarioId=<id> AND Canal='<telegram|whatsapp>'`).
 
 ## Painel web (.NET) — como funciona e rodar
 
@@ -170,19 +191,31 @@ O `DatabaseSeeder` aplica a migration do Identity no startup e cria as roles + o
   `8.0.39`** (sem `AutoDetect`, que abria conexão no boot). `appsettings.json` versionado é placeholder
   (`localhost`); os segredos vêm das env vars do Dokploy.
 
-**Bot (Python)** — `saas/bot/Dockerfile` (`python:3.12-slim`). Reaproveita o **serviço que já existia**
-no projeto HermesTelegram do Dokploy (era o bot single-tenant `@HermesAssistente`, agora aposentado):
-- **Compose Path** `saas/docker-compose.yml` (só o bot, **sem ollama** — LLM via Groq) **ou** Application
-  com `saas/bot/Dockerfile` (context `saas/bot`).
-- **Environment:** `TELEGRAM_TOKEN=<token do @DigiPlayHermes / digiplayhermesbot>`, `MYSQL_HOST`/`PORT`/
-  `DB`/`USER`/`PASSWORD` (mesmo banco do painel), `LLM_PROVIDER=groq`, `GROQ_API_KEY=***`,
-  `OPENAI_API_KEY=***` (voz, opcional), `TZ=America/Sao_Paulo`. **Sem domínio/porta** (é worker).
-- ⚠️ **Um token por processo:** não rodar o `python bot.py` local e o serviço do VPS ao mesmo tempo com
-  o mesmo token (conflito 409 no Telegram).
+**Layout no Dokploy (projetos separados, 1 serviço cada):**
+- **`HermesTelegram`** = o **bot** (`saas/bot`) — roda Telegram **e** WhatsApp no mesmo processo.
+- **`HermesSite`** = o **painel** (.NET, `hermes.digiplay.net.br`).
+- (o antigo `HermesWhats` era um spike de eco, **aposentado**.)
 
-**Bot do SaaS = `@DigiPlayHermes` (`digiplayhermesbot`).** O código (`saas/bot`) é o "cérebro"; o token só
-troca o "número". O vínculo é por **TelegramUserId** (mesmo em qualquer bot), então quem já vinculou
-continua vinculado se trocar de bot.
+**Bot (Python)** — `saas/bot/Dockerfile` (`python:3.12-slim`), deploy via **docker-compose**
+(`saas/docker-compose.yml`, serviço `bot`, sem ollama — LLM via Groq):
+- **Environment:** `TELEGRAM_TOKEN=<@digiplayhermesbot>`; `MYSQL_HOST`/`PORT`/`DB`/`USER`/`PASSWORD`
+  (mesmo banco do painel); `LLM_PROVIDER=groq`, `GROQ_API_KEY=***`, `GROQ_MODEL=openai/gpt-oss-120b`;
+  `OPENAI_API_KEY=***` (voz); `TZ=America/Sao_Paulo`. **Para o WhatsApp:** `UAZAPI_BASE_URL`,
+  `UAZAPI_TOKEN` (sem elas o canal WhatsApp não sobe). `WA_DEBUG=1` só p/ diagnóstico.
+- **Domain (só p/ o WhatsApp):** o Telegram é long polling (não precisa de porta), mas o webhook do
+  WhatsApp precisa de um **Domain** → Service Name `bot`, Container Port **8080**. Domínio real
+  **`hermesbot.digiplay.net.br`** (registro A no SmartASP DNS → `75.119.139.224`). ⚠️ **sslip.io não
+  tem HTTPS válido** (Traefik faz 301→https sem cert) — use subdomínio próprio com Let's Encrypt.
+  Webhook do UAZAPI → `https://hermesbot.digiplay.net.br/webhook`. O log de startup mostra
+  `Canais ativos: Telegram, WhatsApp` quando os dois estão ligados; `GET /` responde
+  `{"ok":true,"service":"hermes-whatsapp"}`.
+- ⚠️ **Um token por processo (Telegram):** não rodar o bot local **e** o do VPS com o mesmo token
+  (conflito 409). No WhatsApp, **um webhook por instância UAZAPI** — use instância separada da
+  produção do Agente Clínica.
+
+**Bots:** Telegram = `@DigiPlayHermes` (`digiplayhermesbot`); WhatsApp = a instância UAZAPI
+(`WhatsApp__BotNumber` no painel). O código (`saas/bot`) é o "cérebro"; o vínculo é por
+`(Canal, IdentificadorCanal)` em `H01Vinculos`, então quem já vinculou segue vinculado.
 
 **Admin:** `admin@hermes.local` / `Admin@123`. ⚠️ O `AdminSeed__Senha` só vale na **1ª criação** — o
 seeder **NÃO** atualiza a senha de um admin já existente. Trocar em *Minha conta → Alterar senha*.
@@ -191,42 +224,56 @@ seeder **NÃO** atualiza a senha de um admin já existente. Trocar em *Minha con
 interativo falha ("could not read Username"); rodar `git push` num terminal próprio abre o popup de
 login e renova. Depois do push, dar **Redeploy** no serviço correspondente (painel e/ou bot).
 
-## Como o bot multi-tenant funciona (Etapa 2)
+## Como o bot multi-canal funciona
 
-**Resolução de tenant** (`tenants.resolve`): toda mensagem parte do `TelegramUserId`
-autenticado (nunca do texto). Ele é procurado em `H01TelegramVinculos` (só `StatusConexao =
-'conectado'`), junta `H01Usuarios` (status `trial`/`ativo`), `H01Assinaturas` e `H01Planos`.
-Sem vínculo → o bot responde com as instruções de onboarding. Resultado é cacheado em memória
-e invalidado no `/start`.
+**Fluxo de uma mensagem:** o adaptador de canal (`channels/telegram.py` ou `whatsapp.py`)
+normaliza a entrada num `Inbound` `(canal, identificador, texto/voz)` e chama
+`engine.processar(inbound, sender)`. O núcleo resolve o tenant, executa a intenção e responde
+pelo `sender` — **sem saber qual é o canal**.
 
-**Onboarding** (`/start <token>`): valida o `TokenVinculo` (não expirado), grava o
-`TelegramUserId`/username, seta `StatusConexao = 'conectado'`, limpa o token e cria a linha
-de `H01Configuracoes`. `/id` funciona sem vínculo (suporte).
+**Resolução de tenant** (`tenants.resolve(canal, identificador)`): a identidade vem SEMPRE do
+canal autenticado (nunca do texto). É procurada em `H01Vinculos` por `(Canal, IdentificadorCanal)`
+com `StatusConexao='conectado'`, juntando `H01Usuarios` (status `trial`/`ativo`), `H01Assinaturas`
+e `H01Planos`. Sem vínculo → o bot responde com o onboarding. Resultado cacheado em memória por
+`(canal, identificador)`, invalidado no vínculo.
+
+**Onboarding** (`tenants.vincular(token, canal, identificador, nome)`): valida o `TokenVinculo`
+(não expirado, do mesmo canal), grava o `IdentificadorCanal`, seta `StatusConexao='conectado'`,
+limpa o token e garante a linha de `H01Configuracoes`. No Telegram é `/start <token>`; no WhatsApp
+o cliente **envia só o código** (o núcleo reconhece uma palavra alfanumérica como token). `/id`
+funciona sem vínculo (suporte) e devolve o identificador do canal.
 
 **Isolamento**: `bills.*` e `reminders.*` recebem `usuario_id` e filtram por ele em toda query
-(padrão `HasQueryFilter` do FaceRenew, aplicado à mão no SQL). O estado em memória
-(histórico de conversa, confirmações pendentes) é chaveado por `UsuarioId`.
+(padrão `HasQueryFilter` do FaceRenew, aplicado à mão no SQL). O histórico de conversa em memória
+é chaveado por `UsuarioId`.
+
+**Voz (agnóstica, `voice.py`):** áudio recebido → o adaptador baixa (Telegram: getFile; WhatsApp:
+`POST /message/download`) → `voice.transcrever` (Whisper, pt-BR). Lembrete falado → `voice.tts`
+(OpenAI TTS `gpt-4o-mini-tts`, OGG/Opus, normalizado por ffmpeg) → o adaptador envia (Telegram:
+sendVoice; WhatsApp: `POST /send/media` type `ptt`).
 
 **Medição** (`usage.registrar`, upsert em `H01UsoMensal` por `UsuarioId+Ano+Mes`):
 - **Tokens LLM** — `llm_chat` lê `total_tokens` (Groq) ou `prompt_eval_count+eval_count` (Ollama).
-- **Segundos de voz** — `duration` do áudio do Telegram, medido antes de transcrever.
+- **Segundos de voz** — duração do áudio recebido, medida antes de transcrever.
 - **Caracteres TTS** — tamanho do texto falado nos lembretes.
 - **Mensagens** — 1 por mensagem processada.
 
 **Limite de voz** (`usage.voz_permitida`): antes de transcrever, compara `SegundosVoz` do mês
-com `LimiteVozSegMes` do plano (grátis = 600s; pago = ilimitado). Estourou → o bot pede uso
-por texto até virar o mês. Nada mais é bloqueado.
+com `LimiteVozSegMes` do plano (grátis = 600s; pago tem teto). Estourou → o bot pede uso por
+texto até virar o mês. Nada mais é bloqueado.
 
-**Agendador multi-tenant**: varre a cada 60s. As queries `bills.vencendo` e `reminders.due`
-respeitam a `HoraLembrete` e a `AntecedenciaMin` de **cada tenant** (via `H01Configuracoes`,
-filtradas no SQL) e já trazem o `TelegramUserId` de destino e o `VozAtiva`.
+**Agendador multi-tenant/multi-canal**: varre a cada 60s. `bills.vencendo` e `reminders.due`
+respeitam `HoraLembrete`/`AntecedenciaMin` de **cada tenant** (via `H01Configuracoes`) e fazem
+JOIN em `H01Vinculos` — trazem `(canal, identificador)` do destino e `VozAtiva`. O `engine`
+entrega pelo `sender_for(canal)` (quem tem os dois canais conectados recebe nos dois).
 
 ## Cadastro de conta pelo bot (regras)
 Ao cadastrar uma conta a pagar por texto/voz, o bot **exige os três**: descrição, valor e
 vencimento. Faltando qualquer um, ele **pede** o que falta e **não cadastra** (`extract_bill`
-devolve `None` no campo ausente; `handle` valida). Reconhece a intenção mesmo sem número
-("agendar pagamento", "cadastrar conta"…). No **eco** da voz (`🎤 Entendi:`), quando é cadastro
-de conta, a **data é omitida** (aparece formatada só na confirmação `📝 Entendi`, `_echo_sem_data`).
+devolve `None` no campo ausente; `engine.processar` valida). Reconhece a intenção mesmo sem
+número ("agendar pagamento", "cadastrar conta"…). Contas e compromissos **recorrentes** também
+(ex.: "condomínio 600 todo dia 15 por 12 meses", "remédio de 8 em 8h por 5 dias"), com teto de
+30 itens por série e limites de volume por usuário (`LimiteCompromissos`/`LimiteContas`).
 
 ## Rodar o bot localmente (dev)
 1. Schema num MySQL 8 (uma vez): `mysql -u <user> -p < database/schema.sql`.
@@ -238,7 +285,12 @@ de conta, a **data é omitida** (aparece formatada só na confirmação `📝 En
 > ao mesmo tempo (conflito 409 no Telegram).
 
 ## Fluxo de vínculo (resumo)
-1. Painel gera `TokenVinculo` (curto, com `TokenExpiraEm`) na `H01TelegramVinculos` do usuário.
-2. Usuário abre `t.me/<bot>?start=<token>` ou envia `/start <token>`.
-3. Bot valida o token (não expirado), grava o `TelegramUserId`, seta `StatusConexao=conectado`.
-4. A partir daí, mensagens daquele `TelegramUserId` são atendidas como aquele tenant.
+1. Painel gera `TokenVinculo` (curto, com `TokenExpiraEm`) numa linha `(UsuarioId, Canal)` de
+   `H01Vinculos` (`OnboardingService.GerarTokenVinculoAsync(uid, canal)`).
+2. O usuário envia o token no canal escolhido:
+   - **Telegram:** `t.me/<bot>?start=<token>` ou `/start <token>`.
+   - **WhatsApp:** `wa.me/<numero>?text=<token>` ou digita só o código.
+3. Bot valida o token (não expirado, mesmo canal), grava o `IdentificadorCanal`
+   (TelegramUserId / telefone), seta `StatusConexao=conectado`.
+4. A partir daí, mensagens daquele `(Canal, Identificador)` são atendidas como aquele tenant.
+   O mesmo usuário pode repetir para o outro canal — os dados são os mesmos (por `UsuarioId`).

@@ -5,6 +5,10 @@ previsão do tempo e a internet, gerencia contas a pagar e compromissos com lemb
 (inclusive por voz). O "cérebro" (LLM) roda **local** (Hermes 3 via Ollama, na VPS) ou
 na **nuvem** (Groq), alternável por uma variável de ambiente.
 
+> **Nota:** este README cobre o **protótipo single-tenant** (pasta [`bot/`](bot/), SQLite, um só
+> usuário). A evolução em produção é o **SaaS multi-tenant e multi-canal** (Telegram + WhatsApp)
+> na pasta [`saas/`](saas/) — veja [`saas/README.md`](saas/README.md).
+
 ---
 
 ## Funcionalidades

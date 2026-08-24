@@ -19,8 +19,17 @@ builder.Services.AddRazorPages(options =>
 
 builder.Services.AddHttpContextAccessor();
 
-var conn = builder.Configuration.GetConnectionString("DefaultConnection")
+var connBase = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("ConnectionString 'DefaultConnection' não configurada.");
+// Força um teto BAIXO de conexões no pool: o MySQL do SmartASP (compartilhado) tem
+// limite baixo por usuário, e esse limite é DIVIDIDO com o bot. O painel é pouco usado
+// (basicamente cadastro/login), então 4 conexões bastam e evitam "too many connections".
+// Sobrepõe qualquer valor que venha na connection string (o default do ADO.NET seria 100).
+var conn = new MySqlConnector.MySqlConnectionStringBuilder(connBase)
+{
+    MaximumPoolSize = 4,
+    MinimumPoolSize = 0,
+}.ConnectionString;
 // Versão fixa (MySQL 8 do SmartASP) — evita o AutoDetect abrir conexão no startup,
 // que derruba o app se o banco demorar/negar no boot.
 builder.Services.AddDbContext<AppDbContext>(o =>

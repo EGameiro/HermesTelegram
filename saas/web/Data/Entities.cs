@@ -21,14 +21,14 @@ public class Usuario
     public DateTime? AtualizadoEm { get; set; }
 }
 
-/// <summary>Vínculo de canal (multi-canal). Identidade = IdentificadorCanal por Canal:
-/// telegram -> TelegramUserId; whatsapp -> telefone (só dígitos). Um por (usuário, canal).</summary>
+/// <summary>Vínculo de canal. Identidade = IdentificadorCanal por Canal:
+/// whatsapp -> telefone (só dígitos). Um por (usuário, canal).</summary>
 public class Vinculo
 {
     public long Id { get; set; }
     public long UsuarioId { get; set; }
-    public string Canal { get; set; } = "telegram";          // telegram|whatsapp
-    public string? IdentificadorCanal { get; set; }          // Telegram user id ou telefone
+    public string Canal { get; set; } = "whatsapp";          // whatsapp
+    public string? IdentificadorCanal { get; set; }          // telefone (só dígitos)
     public string? NomeExibicao { get; set; }                // username / pushname
     public string StatusConexao { get; set; } = "pendente";  // pendente|conectado|desconectado
     public string? TokenVinculo { get; set; }

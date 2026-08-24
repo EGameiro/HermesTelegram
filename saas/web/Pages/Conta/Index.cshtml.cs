@@ -68,7 +68,7 @@ public class IndexModel : PageModel
         if (usuario != null) { usuario.Status = "cancelado"; usuario.AtualizadoEm = DateTime.UtcNow; }
 
         await _db.SaveChangesAsync();
-        TempData["Ok"] = "Assinatura cancelada. O assistente deixará de responder no Telegram.";
+        TempData["Ok"] = "Assinatura cancelada. O assistente deixará de responder no WhatsApp.";
         return RedirectToPage();
     }
 

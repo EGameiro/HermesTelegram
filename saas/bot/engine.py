@@ -2,8 +2,8 @@
 
 Recebe uma mensagem já normalizada (`Inbound`) + o transporte do canal (`Sender`),
 resolve o tenant pela identidade do canal e executa a intenção (contas, compromissos,
-clima, busca ou conversa). Nada aqui conhece Telegram ou WhatsApp — a resposta sai
-pelo `MsgContext`, e o agendador entrega pelo sender registrado de cada canal.
+clima, busca ou conversa). Nada aqui conhece o canal concreto — a resposta sai pelo
+`MsgContext`, e o agendador entrega pelo sender registrado de cada canal.
 """
 import re
 import json
@@ -50,21 +50,12 @@ _WEATHER_KW = [
 
 
 def onboard_msg(canal):
-    if canal == "whatsapp":
-        return (
-            "👋 Olá! Eu sou o Hermes, seu assistente pessoal.\n\n"
-            "Este número ainda não está conectado a nenhuma conta. Para começar:\n"
-            "1. Acesse o painel do Hermes e faça login.\n"
-            "2. Gere seu código de conexão.\n"
-            "3. Volte aqui e envie o código (só o código).\n\n"
-            "Se precisar do seu identificador de suporte, envie /id."
-        )
     return (
-        "👋 Olá! Eu sou o Hermes, seu assistente pessoal por Telegram.\n\n"
+        "👋 Olá! Eu sou o Hermes, seu assistente pessoal.\n\n"
         "Este número ainda não está conectado a nenhuma conta. Para começar:\n"
         "1. Acesse o painel do Hermes e faça login.\n"
         "2. Gere seu código de conexão.\n"
-        "3. Volte aqui e envie: /start SEU_CODIGO\n\n"
+        "3. Volte aqui e envie o código (só o código).\n\n"
         "Se precisar do seu identificador de suporte, envie /id."
     )
 

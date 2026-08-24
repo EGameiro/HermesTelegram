@@ -42,7 +42,7 @@ public class DashboardModel : PageModel
         Assinatura = await _db.Assinaturas.Include(a => a.Plano)
             .OrderByDescending(a => a.CriadoEm).FirstOrDefaultAsync();
         Plano = Assinatura?.Plano;
-        Vinculo = await _db.Vinculos.FirstOrDefaultAsync(v => v.Canal == OnboardingService.CANAL_TELEGRAM);
+        Vinculo = await _db.Vinculos.FirstOrDefaultAsync(v => v.Canal == OnboardingService.CANAL_WHATSAPP);
 
         var agora = BrTime.Now;
         Uso = await _db.UsoMensal.FirstOrDefaultAsync(u => u.Ano == agora.Year && u.Mes == agora.Month);

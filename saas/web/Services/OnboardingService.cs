@@ -8,10 +8,9 @@ namespace HermesSaaS.Web.Services;
 public record RegistroResultado(bool Sucesso, long UsuarioId, IEnumerable<string> Erros);
 
 /// <summary>Cadastro de novo tenant (Usuario + Config + Assinatura trial + Vínculo) e
-/// geração do token de vínculo do Telegram (onboarding).</summary>
+/// geração do token de vínculo do WhatsApp (onboarding).</summary>
 public class OnboardingService
 {
-    public const string CANAL_TELEGRAM = "telegram";
     public const string CANAL_WHATSAPP = "whatsapp";
 
     private const string ROLE_CLIENTE = "Cliente";
@@ -62,7 +61,7 @@ public class OnboardingService
         _db.Vinculos.Add(new Vinculo
         {
             UsuarioId = usuario.Id,
-            Canal = CANAL_TELEGRAM,
+            Canal = CANAL_WHATSAPP,
             StatusConexao = "pendente",
         });
         _db.Assinaturas.Add(new Assinatura
@@ -99,8 +98,8 @@ public class OnboardingService
     }
 
     /// <summary>Gera (ou renova) o token de vínculo de um canal do usuário logado.
-    /// Retorna o token curto (Telegram: /start &lt;token&gt;; WhatsApp: enviar o código ao bot).</summary>
-    public async Task<string> GerarTokenVinculoAsync(long usuarioId, string canal = CANAL_TELEGRAM)
+    /// Retorna o token curto que o usuário envia ao bot no WhatsApp.</summary>
+    public async Task<string> GerarTokenVinculoAsync(long usuarioId, string canal = CANAL_WHATSAPP)
     {
         var vinc = await _db.Vinculos.FirstOrDefaultAsync(v => v.UsuarioId == usuarioId && v.Canal == canal);
         if (vinc is null)

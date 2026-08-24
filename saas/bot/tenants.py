@@ -1,12 +1,11 @@
 """Resolução de tenant por (canal, identificador) + vínculo por token + config por usuário.
 
 Cada USUÁRIO é um tenant. A identidade vem SEMPRE do canal autenticado, nunca do input:
-- telegram: identificador = TelegramUserId
 - whatsapp: identificador = telefone (só dígitos)
 
 Backend: tabela genérica H01Vinculos (Canal + IdentificadorCanal). Um usuário pode ter
 um vínculo por canal. O token de onboarding é gerado pelo painel numa linha (UsuarioId,
-Canal) e consumido aqui pelo /start (Telegram) ou pelo código digitado (WhatsApp).
+Canal) e consumido aqui pelo código que o usuário envia ao bot.
 """
 import logging
 from datetime import datetime
@@ -111,10 +110,10 @@ def vincular(token: str, canal: str, identificador: str, nome: str | None):
         return False, "Código de vínculo vazio."
 
     identificador = str(identificador)
-    canal_label = "WhatsApp" if canal == "whatsapp" else "Telegram"
+    canal_label = "WhatsApp" if canal == "whatsapp" else canal
 
-    # O token pertence a uma linha (UsuarioId, Canal). Casar o canal evita consumir
-    # um código de WhatsApp pelo Telegram (e vice-versa).
+    # O token pertence a uma linha (UsuarioId, Canal). Casar o canal garante que o
+    # código só é consumido pelo canal para o qual foi gerado.
     vinc = db.query_one(
         """
         SELECT v.Id, v.UsuarioId, v.TokenExpiraEm, u.NomeCompleto, u.Status

@@ -1,12 +1,11 @@
 """Contrato comum dos canais + registro de senders + contexto de mensagem.
 
-O núcleo (engine) NÃO sabe se está falando com Telegram ou WhatsApp: ele recebe um
-`Inbound` já normalizado e um `Sender` (transporte do canal), e responde por um
-`MsgContext`. O agendador usa o registro `sender_for(canal)` para entregar lembretes
-no canal em que cada tenant está conectado.
+O núcleo (engine) NÃO conhece o canal: ele recebe um `Inbound` já normalizado e um
+`Sender` (transporte do canal), e responde por um `MsgContext`. O agendador usa o
+registro `sender_for(canal)` para entregar lembretes no canal do tenant. A abstração
+segue genérica para permitir novos canais no futuro; hoje só o WhatsApp está ativo.
 
 Identidade por canal:
-- telegram: `identificador` = TelegramUserId (como string)
 - whatsapp: `identificador` = telefone só dígitos (E.164 sem '+')
 """
 from abc import ABC, abstractmethod

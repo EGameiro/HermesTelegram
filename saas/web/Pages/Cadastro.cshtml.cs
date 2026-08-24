@@ -62,6 +62,6 @@ public class CadastroModel : PageModel
         if (user != null)
             await _signIn.SignInAsync(user, isPersistent: true);
 
-        return RedirectToPage("/Telegram/Conectar");
+        return RedirectToPage("/WhatsApp/Conectar");
     }
 }

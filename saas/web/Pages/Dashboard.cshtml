@@ -11,8 +11,8 @@
 @if (!Model.Conectado)
 {
     <div class="alert alert-warning d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-exclamation-triangle me-1"></i> Seu Telegram ainda não está conectado — o assistente só funciona depois de conectar.</span>
-        <a asp-page="/Telegram/Conectar" class="btn btn-sm btn-hermes">Conectar agora</a>
+        <span><i class="bi bi-exclamation-triangle me-1"></i> Seu WhatsApp ainda não está conectado — o assistente só funciona depois de conectar.</span>
+        <a asp-page="/WhatsApp/Conectar" class="btn btn-sm btn-hermes">Conectar agora</a>
     </div>
 }
 
@@ -74,19 +74,19 @@
 
     <div class="col-12 col-lg-6">
         <div class="card p-3 h-100">
-            <h6 class="text-muted text-uppercase small">Conexão Telegram</h6>
+            <h6 class="text-muted text-uppercase small">Conexão WhatsApp</h6>
             @if (Model.Conectado)
             {
                 <span class="h5 text-success mb-0"><i class="bi bi-check-circle-fill"></i> Conectado</span>
                 @if (!string.IsNullOrEmpty(Model.Vinculo?.NomeExibicao))
                 {
-                    <p class="text-muted small mb-0 mt-2">@@@Model.Vinculo!.NomeExibicao</p>
+                    <p class="text-muted small mb-0 mt-2">@Model.Vinculo!.NomeExibicao</p>
                 }
             }
             else
             {
                 <span class="h5 text-warning mb-0"><i class="bi bi-dash-circle"></i> Pendente</span>
-                <a asp-page="/Telegram/Conectar" class="small mt-2 text-hermes">Conectar →</a>
+                <a asp-page="/WhatsApp/Conectar" class="small mt-2 text-hermes">Conectar →</a>
             }
         </div>
     </div>

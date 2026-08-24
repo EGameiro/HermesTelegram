@@ -35,7 +35,7 @@
     <div class="col-12 col-lg-6">
         <div class="card p-3 border-warning mb-3">
             <h6 class="text-warning text-uppercase small mb-2">Cancelar assinatura</h6>
-            <p class="small text-muted">Ao cancelar, o assistente deixa de responder no Telegram. Seus dados continuam guardados.</p>
+            <p class="small text-muted">Ao cancelar, o assistente deixa de responder no WhatsApp. Seus dados continuam guardados.</p>
             <form method="post" asp-page-handler="Cancelar" onsubmit="return confirm('Tem certeza que deseja cancelar a assinatura?');">
                 <button class="btn btn-outline-warning" type="submit">Cancelar assinatura</button>
             </form>
@@ -44,7 +44,7 @@
         <div class="card p-3 border-danger">
             <h6 class="text-danger text-uppercase small mb-2"><i class="bi bi-exclamation-octagon"></i> Excluir meus dados (LGPD)</h6>
             <p class="small text-muted mb-2">
-                Apaga <strong>permanentemente</strong> sua conta e todos os dados (contas, compromissos, histórico e vínculo do Telegram). Esta ação é irreversível.
+                Apaga <strong>permanentemente</strong> sua conta e todos os dados (contas, compromissos, histórico e vínculo do WhatsApp). Esta ação é irreversível.
             </p>
             <form method="post" asp-page-handler="Excluir"
                   onsubmit="return confirm('Isso apaga TUDO e não pode ser desfeito. Continuar?');">

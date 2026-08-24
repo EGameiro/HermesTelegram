@@ -1,8 +1,8 @@
 """Voz agnóstica de canal: transcrição (Whisper) e síntese (TTS) da OpenAI.
 
 O download do áudio recebido e o envio do áudio gerado são responsabilidade de cada
-adaptador de canal (Telegram baixa via getFile, WhatsApp via UAZAPI). Aqui ficam só
-as etapas neutras: bytes de áudio -> texto (transcrever) e texto -> bytes (tts)."""
+adaptador de canal (no WhatsApp, via UAZAPI). Aqui ficam só as etapas neutras:
+bytes de áudio -> texto (transcrever) e texto -> bytes (tts)."""
 import shutil
 import logging
 import subprocess

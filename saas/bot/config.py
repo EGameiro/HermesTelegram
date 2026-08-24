@@ -5,8 +5,24 @@ adaptadores de canal leiam de um lugar só. NUNCA usar date.today()/datetime.now
 naive no código — sempre agora_local()/hoje_local() (o container roda em UTC).
 """
 import os
+import socket
 from datetime import datetime
 from zoneinfo import ZoneInfo
+
+# --- Força IPv4 (process-wide) ----------------------------------------------
+# Em máquinas com IPv6 quebrado, cada conexão HTTPS NOVA (Groq/OpenAI/UAZAPI) trava
+# ~21s no timeout do SYN antes de cair pro IPv4. Filtrando o getaddrinfo para IPv4 o
+# handshake volta ao normal. Seguro: se não houver IPv4, mantém a lista original.
+# Desligue com FORCE_IPV4=0. (Aplica-se ao processo todo; importe config cedo.)
+if os.environ.get("FORCE_IPV4", "1").lower() not in ("0", "false", "no"):
+    _orig_getaddrinfo = socket.getaddrinfo
+
+    def _getaddrinfo_ipv4(*args, **kwargs):
+        res = _orig_getaddrinfo(*args, **kwargs)
+        v4 = [r for r in res if r[0] == socket.AF_INET]
+        return v4 or res
+
+    socket.getaddrinfo = _getaddrinfo_ipv4
 
 # --- Cérebro (LLM) ----------------------------------------------------------
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://ollama:11434").rstrip("/")

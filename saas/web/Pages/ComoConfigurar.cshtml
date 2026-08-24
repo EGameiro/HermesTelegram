@@ -2,12 +2,14 @@
 @model HermesSaaS.Web.Pages.ComoConfigurarModel
 @{
     ViewData["Title"] = "Como configurar o Hermes";
+    // Link direto pro bot no WhatsApp (se o número estiver configurado).
+    var waLink = !string.IsNullOrEmpty(Model.BotNumero) ? $"https://wa.me/{Model.BotNumero}" : null;
 }
 
 <style>
     .hermes-tut{
         --tut-brand:#5A4FCF; --tut-brand-2:#7a6ff0; --tut-brand-soft:#efeefe;
-        --tut-tg:#229ED9; --tut-tg-soft:#e6f4fc;
+        --tut-wa:#25D366; --tut-wa-dark:#128C7E; --tut-wa-soft:#e8f9ef;
         --tut-ink:#1F2430; --tut-muted:#6c6c86; --tut-line:#e8e8f3;
         --tut-ok:#16a34a; --tut-ok-soft:#e9f7ee; --tut-bg:#F6F7FB;
         max-width:720px;
@@ -40,14 +42,15 @@
     .hermes-tut .chip{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:.92rem;
         padding:8px 14px;border-radius:10px;margin-top:10px;white-space:nowrap;text-decoration:none}
     .hermes-tut .chip.brand{background:var(--tut-brand);color:#fff}
-    .hermes-tut .chip.tg{background:var(--tut-tg);color:#fff}
+    .hermes-tut .chip.wa{background:var(--tut-wa);color:#fff}
+    .hermes-tut .chip.wa:hover{background:var(--tut-wa-dark);color:#fff}
     .hermes-tut .codebox{
         display:inline-flex;align-items:center;gap:8px;margin-top:10px;
         background:#faf9ff;border:1.5px dashed var(--tut-brand-2);border-radius:10px;
         padding:9px 14px;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-        font-weight:700;color:var(--tut-brand);font-size:.98rem;
+        font-weight:700;color:var(--tut-brand);font-size:.98rem;letter-spacing:.08em;
     }
-    .hermes-tut .codebox .tag{color:var(--tut-muted);font-weight:600}
+    .hermes-tut .codebox .tag{color:var(--tut-muted);font-weight:600;letter-spacing:normal}
     .hermes-tut .hint{display:block;margin-top:8px;font-size:.86rem;color:var(--tut-muted)}
     .hermes-tut li.step.done .num{background:var(--tut-ok)}
     .hermes-tut .okbadge{display:inline-flex;align-items:center;gap:7px;margin-top:10px;background:var(--tut-ok-soft);
@@ -73,17 +76,17 @@
         <div class="logo">🤖</div>
         <div>
             <div class="eyebrow">Guia rápido</div>
-            <h1>Como conectar seu Telegram ao Hermes</h1>
+            <h1>Como conectar seu WhatsApp ao Hermes</h1>
         </div>
     </div>
-    <p class="lead">Em poucos minutos o Hermes vira seu assistente pessoal no Telegram — cadastrando contas, agendando compromissos e te lembrando na hora certa. Siga os 7 passos:</p>
+    <p class="lead">Em poucos minutos o Hermes vira seu assistente pessoal no WhatsApp — cadastrando contas, agendando compromissos e te lembrando na hora certa. Siga os 6 passos:</p>
 
     <ol class="steps">
         <li class="step">
             <div class="num">1</div>
             <div class="stepbody">
-                <h3>Tenha o Telegram no celular</h3>
-                <p>Instale o app <b>Telegram</b> (grátis, Android ou iPhone) e crie sua conta, caso ainda não tenha.</p>
+                <h3>Tenha o WhatsApp no celular</h3>
+                <p>Você já usa o <b>WhatsApp</b> de sempre — não precisa instalar nada novo nem criar outra conta.</p>
             </div>
         </li>
         <li class="step">
@@ -96,8 +99,8 @@
         <li class="step">
             <div class="num">3</div>
             <div class="stepbody">
-                <h3>Você cai na tela “Conectar Telegram”</h3>
-                <p>Assim que entrar, o site já abre a página de conexão do Telegram.</p>
+                <h3>Você cai na tela “Conectar WhatsApp”</h3>
+                <p>Assim que entrar, o site já abre a página de conexão. (A qualquer momento você chega nela pelo menu <a asp-page="/WhatsApp/Conectar">Conectar WhatsApp</a>.)</p>
             </div>
         </li>
         <li class="step">
@@ -106,32 +109,30 @@
                 <h3>Gere seu código de conexão</h3>
                 <p>Clique no botão:</p>
                 <span class="chip brand"><i class="bi bi-key-fill"></i> Gerar código de conexão</span>
+                <span class="hint">Vai aparecer um código só seu, por exemplo:</span>
+                <span class="codebox"><span class="tag">exemplo:</span> XXXXXXXX</span>
+                <span class="hint">⏱️ O código vale por 30 minutos. Cada pessoa tem um código diferente.</span>
             </div>
         </li>
         <li class="step">
             <div class="num">5</div>
             <div class="stepbody">
-                <h3>Anote o código que aparecer</h3>
-                <p>Vai surgir um comando começando com <b>/start</b> seguido de um código só seu:</p>
-                <span class="codebox"><span class="tag">exemplo:</span> /start XXXXXXXX</span>
-                <span class="hint">⏱️ O código vale por 30 minutos. Cada pessoa tem um código diferente.</span>
-            </div>
-        </li>
-        <li class="step">
-            <div class="num">6</div>
-            <div class="stepbody">
-                <h3>Abra o bot no Telegram</h3>
-                <p>Toque no link abaixo — ele abre direto a conversa do bot no seu Telegram:</p>
-                <a href="https://t.me/digiplayhermesbot" class="chip tg" target="_blank" rel="noopener"><i class="bi bi-telegram"></i> Abrir @@digiplayhermesbot</a>
+                <h3>Abra a conversa do bot no WhatsApp</h3>
+                <p>Na mesma tela, toque em <b>“Abrir no WhatsApp”</b> — ele já abre a conversa do bot com o seu código preenchido, é só apertar enviar.</p>
+                @if (waLink != null)
+                {
+                    <a href="@waLink" class="chip wa" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> Abrir o bot no WhatsApp</a>
+                }
+                <span class="hint">Se preferir, salve o número do bot nos contatos e mande o código numa mensagem.</span>
             </div>
         </li>
         <li class="step done">
-            <div class="num">7</div>
+            <div class="num">6</div>
             <div class="stepbody">
                 <h3>Envie o código no bot</h3>
-                <p>Na conversa do bot, digite (ou cole) aquele <b>/start</b> com o seu código e envie.</p>
+                <p>Na conversa do bot, mande <b>só o código</b> (aquele de 8 caracteres) e envie.</p>
                 <span class="okbadge"><i class="bi bi-check-circle-fill"></i> Pronto! Aparece “Conta conectada”.</span>
-                <span class="hint">Depois, é só recarregar a página do site para ver o Telegram como conectado.</span>
+                <span class="hint">Depois, é só recarregar a página do site para ver o WhatsApp como conectado.</span>
             </div>
         </li>
     </ol>
@@ -148,5 +149,5 @@
         </div>
     </div>
 
-    <p class="foot">Precisa de ajuda? Refaça o passo <b>4</b> (em <a href="https://hermes.digiplay.net.br/Telegram/Conectar" class="text-hermes">Conectar Telegram</a>) para gerar um novo código a qualquer momento.</p>
+    <p class="foot">Precisa de ajuda? Refaça o passo <b>4</b> (em <a asp-page="/WhatsApp/Conectar">Conectar WhatsApp</a>) para gerar um novo código a qualquer momento.</p>
 </div>

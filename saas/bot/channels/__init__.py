@@ -1,1 +1,1 @@
-"""Adaptadores de canal do Hermes (Telegram, WhatsApp) sobre um núcleo comum."""
+"""Adaptador de canal do Hermes (WhatsApp) sobre um núcleo comum."""

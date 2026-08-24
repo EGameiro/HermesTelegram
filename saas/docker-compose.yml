@@ -1,4 +1,4 @@
-# Hermes SaaS — bot multi-tenant (worker de long polling). LLM via Groq (nuvem),
+# Hermes SaaS — bot multi-tenant (worker WhatsApp/UAZAPI). LLM via Groq (nuvem),
 # então NÃO precisa de ollama. Banco MySQL 8 EXTERNO — configure MYSQL_* no Environment.
 # Aplique antes o schema: saas/database/schema.sql.
 services:
@@ -6,11 +6,9 @@ services:
     build: ./bot
     restart: unless-stopped
     environment:
-      # --- Canais (defina pelo menos um) ---
-      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
-      # WhatsApp via UAZAPI (defina os dois p/ ligar; webhook -> https://<dominio>/webhook:8080)
-      - UAZAPI_BASE_URL=${UAZAPI_BASE_URL:-}
-      - UAZAPI_TOKEN=${UAZAPI_TOKEN:-}
+      # --- Canal WhatsApp via UAZAPI (obrigatório; webhook -> https://<dominio>/webhook) ---
+      - UAZAPI_BASE_URL=${UAZAPI_BASE_URL}
+      - UAZAPI_TOKEN=${UAZAPI_TOKEN}
       - PORT=${PORT:-8080}
       # --- Banco MySQL 8 (multi-tenant) ---
       - MYSQL_HOST=${MYSQL_HOST}

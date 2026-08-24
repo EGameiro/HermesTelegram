@@ -33,15 +33,15 @@ CREATE TABLE IF NOT EXISTS H01Usuarios (
 ) ENGINE=InnoDB;
 
 -- ----------------------------------------------------------------------------
--- 2) Vínculo de canal (multi-canal: Telegram, WhatsApp...). Modelo A: um bot por
---    canal identifica o cliente pelo IdentificadorCanal (Telegram user id / telefone).
---    Um usuário pode ter um vínculo por canal (ex.: Telegram E WhatsApp).
+-- 2) Vínculo de canal. Modelo A: o bot identifica o cliente pelo IdentificadorCanal
+--    (no WhatsApp, o telefone). Um usuário tem um vínculo por canal. A coluna Canal
+--    fica genérica para permitir novos canais no futuro; hoje só 'whatsapp'.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS H01Vinculos (
   Id                 BIGINT       NOT NULL AUTO_INCREMENT,
   UsuarioId          BIGINT       NOT NULL,
-  Canal              VARCHAR(20)  NOT NULL,             -- 'telegram' | 'whatsapp'
-  IdentificadorCanal VARCHAR(64)  NULL,                 -- Telegram user id ou telefone (só dígitos). Null até vincular.
+  Canal              VARCHAR(20)  NOT NULL,             -- 'whatsapp'
+  IdentificadorCanal VARCHAR(64)  NULL,                 -- telefone (só dígitos). Null até vincular.
   NomeExibicao       VARCHAR(100) NULL,                 -- username / pushname (exibição)
   StatusConexao      VARCHAR(20)  NOT NULL DEFAULT 'pendente', -- pendente|conectado|desconectado
   TokenVinculo       VARCHAR(64)  NULL,                 -- token de uso único (onboarding)

@@ -88,25 +88,50 @@ class WhatsAppSender(channels.Sender):
                 return r.content, "audio.ogg", "audio/ogg"
             except Exception:
                 log.exception("Falha ao baixar áudio pela URL do webhook")
-        # 2) Fallback: endpoint downloadMedia pelo id da mensagem
+        # 2) Baixa pelo id da mensagem. Endpoint atual do UAZAPI: POST /message/download.
+        #    (o legado GET /downloadMedia é tentado como fallback.)
         mid = voice_ref.get("id")
         if mid and BASE and TOKEN:
+            audio = self._download_por_id(mid)
+            if audio:
+                return audio
+        return None
+
+    def _download_por_id(self, mid):
+        """Chama o endpoint de download do UAZAPI e devolve (bytes, filename, mime) ou None.
+        Trata resposta com base64 OU com uma URL de arquivo; cai p/ o endpoint legado."""
+        headers = {"token": TOKEN, "Content-Type": "application/json"}
+        tentativas = [
+            ("POST", f"{BASE}/message/download", {"json": {"id": mid}}),
+            ("GET",  f"{BASE}/downloadMedia",    {"params": {"id": mid}}),  # legado
+        ]
+        for metodo, url, kw in tentativas:
             try:
-                r = requests.get(
-                    f"{BASE}/downloadMedia",
-                    headers={"token": TOKEN},
-                    params={"id": mid},
-                    timeout=60,
-                )
+                r = requests.request(metodo, url, headers=headers, timeout=60, **kw)
                 r.raise_for_status()
+                # resposta pode ser JSON (base64 ou fileURL) ou os próprios bytes
+                ctype = r.headers.get("content-type", "")
+                if "application/json" not in ctype:
+                    if r.content:
+                        return r.content, "audio.ogg", "audio/ogg"
+                    continue
                 data = r.json()
-                b64 = data.get("base64") or data.get("data") or ""
-                if "," in b64:
-                    b64 = b64.split(",", 1)[1]
-                if b64:
-                    return base64.b64decode(b64), "audio.ogg", "audio/ogg"
+                mime = data.get("mimetype") or data.get("mimeType") or "audio/ogg"
+                b64 = data.get("base64") or data.get("data") or data.get("fileBase64") or ""
+                if isinstance(b64, str) and b64:
+                    if "," in b64:
+                        b64 = b64.split(",", 1)[1]
+                    return base64.b64decode(b64), "audio.ogg", mime
+                furl = (data.get("fileURL") or data.get("fileUrl") or data.get("url")
+                        or data.get("mediaUrl"))
+                if isinstance(furl, str) and furl.startswith("http"):
+                    rr = requests.get(furl, timeout=60)
+                    rr.raise_for_status()
+                    return rr.content, "audio.ogg", mime
+                log.warning("Download UAZAPI (%s) sem base64/URL utilizável: chaves=%s",
+                            url, list(data.keys()))
             except Exception:
-                log.exception("Falha ao baixar áudio via downloadMedia")
+                log.warning("Falha no download de áudio via %s %s", metodo, url, exc_info=True)
         return None
 
 

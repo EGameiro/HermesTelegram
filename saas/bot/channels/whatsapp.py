@@ -9,8 +9,8 @@ Contrato UAZAPI (mesmo do Agente Clínica, produção):
 - ENVIO texto:  POST {BASE}/send/text  header {token}  body {number, text}
 - WEBHOOK:      mensagem em payload["message"]; remetente em sender_pn; texto em
                 text/content; tipo em type/messageType ('audio'/'ptt'); id em id/messageid.
-- DOWNLOAD:     URL no content (se http) OU GET {BASE}/downloadMedia?id={id} -> {base64|data}.
-- ENVIO áudio:  não implementado (sem contrato provado) -> lembrete de voz cai p/ texto.
+- DOWNLOAD:     POST {BASE}/message/download body {id, return_base64} -> {base64Data|fileURL, mimetype}.
+- ENVIO áudio:  POST {BASE}/send/media body {number, type:'ptt', file:'data:audio/ogg;base64,...'}.
 """
 import os
 import base64
@@ -71,9 +71,33 @@ class WhatsAppSender(channels.Sender):
         return None
 
     def send_voice(self, identificador, audio_bytes, caption=None) -> bool:
-        # Envio de áudio no WhatsApp ainda não implementado (sem contrato UAZAPI provado).
-        # Retorna False -> o engine entrega o lembrete como TEXTO.
-        return False
+        """Envia o áudio como NOTA DE VOZ (PTT) via UAZAPI: POST /send/media type=ptt,
+        file=base64 (OGG/Opus, que é o que o TTS já gera). Nota de voz não leva legenda,
+        então a legenda vai como texto separado. Retorna True se o áudio foi enviado."""
+        if not BASE or not TOKEN or not audio_bytes:
+            return False
+        b64 = base64.b64encode(audio_bytes).decode()
+        try:
+            r = requests.post(
+                f"{BASE}/send/media",
+                headers={"token": TOKEN, "Content-Type": "application/json"},
+                json={
+                    "number": _limpar_numero(identificador),
+                    "type": "ptt",
+                    "file": f"data:audio/ogg;base64,{b64}",
+                },
+                timeout=90,
+            )
+            r.raise_for_status()
+        except Exception:
+            log.warning("Falha ao enviar áudio (ptt) via UAZAPI", exc_info=True)
+            return False
+        if caption:  # nota de voz não tem legenda -> manda o texto do lembrete à parte
+            try:
+                self.send_text(identificador, caption)
+            except Exception:
+                log.warning("Falha ao enviar legenda do áudio", exc_info=True)
+        return True
 
     def baixar_audio(self, voice_ref):
         """voice_ref = {"id": message_id, "url": url_ou_None}. Retorna (bytes, filename, mime) ou None."""

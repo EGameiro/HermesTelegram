@@ -252,13 +252,12 @@ def build_app() -> FastAPI:
             if WA_DEBUG:
                 log.info("WA: payload ignorado (não reconheci como mensagem de texto/áudio).")
             return {"ignored": True}
-        # Log seguro (str()[:200] nunca quebra). Dump do payload cru quando NÃO for texto
-        # simples (áudio/mídia) — é como descobrimos o formato de mídia desta instância.
-        texto_log = str(inbound.text)[:200]
-        if inbound.voice_ref is not None or not str(inbound.text).strip() or WA_DEBUG:
+        # Dump do payload cru só com WA_DEBUG=1 (diagnóstico). A linha abaixo é o log
+        # operacional normal — concisa e segura (str()[:200] nunca quebra).
+        if WA_DEBUG:
             log.info("WA payload cru: %s", payload)
         log.info("WA in <- %s | text=%r | voice=%s", inbound.identificador,
-                 texto_log, bool(inbound.voice_ref))
+                 str(inbound.text)[:200], bool(inbound.voice_ref))
         try:
             await run_in_threadpool(engine.processar, inbound, SENDER)
         except Exception:

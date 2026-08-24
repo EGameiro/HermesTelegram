@@ -149,5 +149,49 @@
         </div>
     </div>
 
-    <p class="foot">Precisa de ajuda? Refaça o passo <b>4</b> (em <a asp-page="/WhatsApp/Conectar">Conectar WhatsApp</a>) para gerar um novo código a qualquer momento.</p>
+    <div class="final" style="margin-top:20px">
+        <h2>📅 Conectar a Google Agenda <span style="font-weight:600;font-size:.78rem;color:var(--tut-muted)">opcional</span></h2>
+        <p class="sub">Quer ver seus compromissos também no calendário do celular? Conecte sua conta Google e <strong>todo compromisso que você marcar no Hermes vira um evento na sua agenda</strong> — automaticamente.</p>
+        <ol class="steps" style="margin-top:4px">
+            <li class="step">
+                <div class="num">1</div>
+                <div class="stepbody">
+                    <h3>Abra “Conectar Google Agenda”</h3>
+                    <p>No menu lateral, clique em <a asp-page="/Google/Conectar">Conectar Google Agenda</a>.</p>
+                </div>
+            </li>
+            <li class="step">
+                <div class="num">2</div>
+                <div class="stepbody">
+                    <h3>Clique em “Conectar com o Google”</h3>
+                    <p>Toque no botão:</p>
+                    <span class="chip brand"><i class="bi bi-google"></i> Conectar com o Google</span>
+                </div>
+            </li>
+            <li class="step">
+                <div class="num">3</div>
+                <div class="stepbody">
+                    <h3>Escolha sua conta e autorize</h3>
+                    <p>Faça login na sua conta Google e toque em <b>Permitir</b>. Só isso — você <b>não digita nenhuma senha</b> aqui no Hermes; a autorização é feita pelo próprio Google.</p>
+                </div>
+            </li>
+            <li class="step">
+                <div class="num">4</div>
+                <div class="stepbody">
+                    <h3>Escolha a agenda</h3>
+                    <p>De volta ao Hermes, escolha <b>em qual agenda</b> os compromissos vão entrar e clique em <b>Salvar agenda</b>.</p>
+                </div>
+            </li>
+            <li class="step done">
+                <div class="num">5</div>
+                <div class="stepbody">
+                    <h3>Pronto!</h3>
+                    <span class="okbadge"><i class="bi bi-check-circle-fill"></i> Cada compromisso que você marcar aparece na sua agenda.</span>
+                    <span class="hint">É de mão única (Hermes → Google): o que você marca no Hermes vai pra sua agenda. O aviso na hora continua chegando pelo WhatsApp. Você pode trocar a agenda ou desconectar quando quiser, na mesma tela.</span>
+                </div>
+            </li>
+        </ol>
+    </div>
+
+    <p class="foot">Precisa de ajuda? Refaça o passo <b>4</b> (em <a asp-page="/WhatsApp/Conectar">Conectar WhatsApp</a>) para gerar um novo código, ou reconecte a agenda em <a asp-page="/Google/Conectar">Conectar Google Agenda</a> a qualquer momento.</p>
 </div>

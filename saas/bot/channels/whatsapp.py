@@ -33,6 +33,11 @@ WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")  # opcional
 WA_DEBUG = os.environ.get("WA_DEBUG", "").lower() in ("1", "true", "yes")
 
 
+def _str(v) -> str:
+    """Devolve a string ou '' — protege contra campos que vêm como objeto (dict/list)."""
+    return v if isinstance(v, str) else ""
+
+
 def _limpar_numero(v) -> str:
     return (
         str(v or "")
@@ -132,12 +137,24 @@ def parse_incoming(payload: dict) -> channels.Inbound | None:
         return None
 
     nome = msg.get("senderName") or msg.get("pushName") or msg.get("name")
-    tipo = str(msg.get("type") or msg.get("messageType") or msg.get("mediaType") or "text").lower()
-    content = msg.get("text") or msg.get("content") or ""
 
-    if "audio" in tipo or tipo == "ptt":
+    # Tipo pode vir em type/messageType/mediaType, com valores como 'audio', 'ptt',
+    # 'AudioMessage', 'voice'... Junta tudo e procura a palavra.
+    tipos = " ".join(str(msg.get(k) or "") for k in ("type", "messageType", "mediaType")).lower()
+    is_audio = "audio" in tipos or "ptt" in tipos or "voice" in tipos
+
+    # Texto SÓ se for string (no áudio o campo 'text'/'content' pode vir como objeto).
+    texto = _str(msg.get("text")) or _str(msg.get("content"))
+
+    if is_audio:
         mid = msg.get("messageid") or msg.get("id") or ""
-        url = content if str(content).startswith("http") else None
+        # Procura a URL da mídia em campos comuns do UAZAPI (só strings http).
+        url = None
+        for k in ("mediaUrl", "url", "fileURL", "downloadUrl", "content", "text"):
+            v = msg.get(k)
+            if isinstance(v, str) and v.startswith("http"):
+                url = v
+                break
         try:
             seg = int(msg.get("seconds") or msg.get("duration") or 0)
         except (TypeError, ValueError):
@@ -147,7 +164,7 @@ def parse_incoming(payload: dict) -> channels.Inbound | None:
             text="", voice_ref={"id": mid, "url": url}, voice_seg=seg,
         )
 
-    return channels.Inbound(canal="whatsapp", identificador=numero, nome=nome, text=content)
+    return channels.Inbound(canal="whatsapp", identificador=numero, nome=nome, text=texto)
 
 
 def build_app() -> FastAPI:
@@ -178,9 +195,13 @@ def build_app() -> FastAPI:
             if WA_DEBUG:
                 log.info("WA: payload ignorado (não reconheci como mensagem de texto/áudio).")
             return {"ignored": True}
-        # Log de diagnóstico: mostra EXATAMENTE o texto que o núcleo vai processar.
+        # Log seguro (str()[:200] nunca quebra). Dump do payload cru quando NÃO for texto
+        # simples (áudio/mídia) — é como descobrimos o formato de mídia desta instância.
+        texto_log = str(inbound.text)[:200]
+        if inbound.voice_ref is not None or not str(inbound.text).strip() or WA_DEBUG:
+            log.info("WA payload cru: %s", payload)
         log.info("WA in <- %s | text=%r | voice=%s", inbound.identificador,
-                 (inbound.text or "")[:200], bool(inbound.voice_ref))
+                 texto_log, bool(inbound.voice_ref))
         try:
             await run_in_threadpool(engine.processar, inbound, SENDER)
         except Exception:

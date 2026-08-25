@@ -30,11 +30,11 @@
 
     .hero-lp .video { max-width: min(760px, 94vw); margin: 34px auto 0; }
     .hero-lp .frame {
-        position: relative; aspect-ratio: 16 / 9; border-radius: 16px; overflow: hidden;
-        background: #000;
-        box-shadow: 0 16px 44px rgba(40,40,90,.22); display: flex; align-items: center; justify-content: center;
+        position: relative; border-radius: 16px; overflow: hidden; background: #000; line-height: 0;
+        box-shadow: 0 16px 44px rgba(40,40,90,.22);
     }
-    .hero-lp .frame video, .hero-lp .frame iframe { width: 100%; height: 100%; object-fit: cover; border: 0; display: block; }
+    /* height:auto => a moldura assume a proporção real do vídeo (sem corte nem barra preta). */
+    .hero-lp .frame video, .hero-lp .frame iframe { width: 100%; height: auto; border: 0; display: block; }
     .hero-lp .frame .ph { text-align: center; color: #fff; padding: 20px; }
     .hero-lp .frame .play {
         width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,.92); color: #5A4FCF;

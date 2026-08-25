@@ -12,6 +12,7 @@ builder.Services.AddRazorPages(options =>
 {
     // Todo o painel exige login; as páginas públicas liberam explicitamente com [AllowAnonymous].
     options.Conventions.AuthorizeFolder("/");
+    options.Conventions.AllowAnonymousToPage("/Index");
     options.Conventions.AllowAnonymousToFolder("/Login");
     options.Conventions.AllowAnonymousToPage("/Cadastro");
     options.Conventions.AllowAnonymousToPage("/AcessoNegado");

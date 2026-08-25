@@ -5,5 +5,11 @@ namespace HermesSaaS.Web.Pages;
 
 public class IndexModel : PageModel
 {
-    public IActionResult OnGet() => RedirectToPage("/Dashboard");
+    // Landing pública. Quem já está logado vai direto pro painel.
+    public IActionResult OnGet()
+    {
+        if (User.Identity?.IsAuthenticated == true)
+            return RedirectToPage("/Dashboard");
+        return Page();
+    }
 }

@@ -161,7 +161,20 @@ def vincular(token: str, canal: str, identificador: str, nome: str | None):
     ensure_config(vinc["UsuarioId"])
     invalidate(canal, identificador)
     log.info("%s %s vinculado ao usuário %s.", canal, identificador, vinc["UsuarioId"])
-    return True, f"✅ Conta conectada, {vinc['NomeCompleto'].split()[0]}! Pode começar a usar o Hermes. 🚀"
+    primeiro_nome = (vinc["NomeCompleto"] or "").split()[0] if vinc["NomeCompleto"] else ""
+    saudacao = f"✅ Pronto, {primeiro_nome}! Seu WhatsApp está conectado. 🎉" if primeiro_nome \
+        else "✅ Pronto! Seu WhatsApp está conectado. 🎉"
+    return True, (
+        f"{saudacao}\n\n"
+        "Eu sou o Hermes 🤖, seu assistente pessoal. Eu *anoto suas contas a pagar* e "
+        "*seus compromissos* e te *lembro na hora certa* — é só falar comigo por texto ou "
+        "áudio 🎤, do jeito que você fala normalmente.\n\n"
+        "Experimente me mandar agora:\n"
+        "💰 \"conta de luz de 120 reais, vence dia 25\"\n"
+        "📅 \"me avisa amanhã às 9h da reunião com a Adriana\"\n"
+        "📋 \"quanto tenho pra pagar esse mês?\"\n\n"
+        "Digite */ajuda* quando quiser ver tudo que eu faço."
+    )
 
 
 def ensure_config(usuario_id: int):

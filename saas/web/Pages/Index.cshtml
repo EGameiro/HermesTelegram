@@ -1,2 +1,114 @@
 @page
 @model IndexModel
+@{
+    ViewData["Title"] = "Seu assistente pessoal no WhatsApp";
+    Layout = "_Layout";
+}
+
+<style>
+    .hero-lp { --lp-ink:#1F2430; --lp-muted:#5b5b73; }
+    .hero-lp .wrap { max-width: 960px; margin: 0 auto; padding: 8px 4px 40px; }
+    .hero-lp .top { text-align: center; padding: 32px 0 8px; }
+    .hero-lp .logo {
+        width: 64px; height: 64px; border-radius: 18px; margin: 0 auto 16px;
+        background: linear-gradient(135deg, #5A4FCF, #7a6ff0);
+        display: flex; align-items: center; justify-content: center; font-size: 34px;
+        box-shadow: 0 10px 26px rgba(90,79,207,.35);
+    }
+    .hero-lp h1 {
+        font-size: clamp(1.7rem, 5vw, 2.6rem); font-weight: 800; letter-spacing: -.02em;
+        color: var(--lp-ink); margin: 0 0 12px; line-height: 1.1;
+    }
+    .hero-lp h1 .hl { color: #5A4FCF; }
+    .hero-lp .lead {
+        font-size: clamp(1rem, 2.4vw, 1.2rem); color: var(--lp-muted);
+        max-width: 640px; margin: 0 auto 24px; line-height: 1.5;
+    }
+    .hero-lp .ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 6px; }
+    .hero-lp .ctas .btn { padding: .7rem 1.4rem; font-weight: 600; border-radius: .7rem; }
+    .hero-lp .fineprint { color: var(--lp-muted); font-size: .85rem; margin-top: 10px; }
+
+    .hero-lp .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 40px 0 8px; }
+    @@media (max-width: 760px) { .hero-lp .cards { grid-template-columns: 1fr; } }
+    .hero-lp .b {
+        background: #fff; border: 1px solid #ececf6; border-radius: 16px; padding: 20px;
+        box-shadow: 0 6px 18px rgba(40,40,90,.05);
+    }
+    .hero-lp .b .em { font-size: 1.7rem; }
+    .hero-lp .b h3 { font-size: 1.05rem; margin: 8px 0 6px; color: var(--lp-ink); letter-spacing: -.01em; }
+    .hero-lp .b p { color: var(--lp-muted); font-size: .95rem; margin: 0; }
+    .hero-lp .b .ex {
+        display: block; margin-top: 10px; background: #f6f5ff; border-radius: 9px;
+        padding: 8px 11px; font-size: .9rem; color: #443bb0; font-style: italic;
+    }
+
+    .hero-lp .how {
+        margin: 34px auto 0; max-width: 720px; background: #fff; border: 1px solid #ececf6;
+        border-radius: 16px; padding: 22px 24px;
+    }
+    .hero-lp .how h2 { font-size: 1.1rem; text-align: center; color: var(--lp-ink); margin: 0 0 16px; }
+    .hero-lp .steps3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    @@media (max-width: 620px) { .hero-lp .steps3 { grid-template-columns: 1fr; } }
+    .hero-lp .s { display: flex; gap: 11px; align-items: flex-start; }
+    .hero-lp .s .n {
+        flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; background: #22C55E; color: #fff;
+        font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: .95rem;
+    }
+    .hero-lp .s .t { font-size: .95rem; color: var(--lp-ink); }
+    .hero-lp .s .t span { display: block; color: var(--lp-muted); font-size: .84rem; margin-top: 1px; }
+    .hero-lp .closing { text-align: center; margin-top: 30px; }
+    .hero-lp .closing .btn { padding: .7rem 1.6rem; font-weight: 600; border-radius: .7rem; }
+</style>
+
+<div class="hero-lp">
+    <div class="wrap">
+        <div class="top">
+            <div class="logo">🤖</div>
+            <h1>Seu <span class="hl">assistente pessoal</span> no WhatsApp</h1>
+            <p class="lead">
+                Fale por <strong>áudio ou texto</strong> e o Hermes anota suas <strong>contas a pagar</strong>
+                e seus <strong>compromissos</strong> — e te <strong>lembra na hora certa</strong>.
+                Sem instalar nada, direto no seu WhatsApp.
+            </p>
+            <div class="ctas">
+                <a asp-page="/Cadastro" class="btn btn-hermes"><i class="bi bi-whatsapp"></i> Criar conta grátis</a>
+                <a asp-page="/Login/Index" class="btn btn-outline-secondary">Já tenho conta</a>
+            </div>
+            <div class="fineprint">14 dias de teste grátis · sem cartão</div>
+        </div>
+
+        <div class="cards">
+            <div class="b">
+                <div class="em">💰</div>
+                <h3>Nunca mais esqueça uma conta</h3>
+                <p>Fale o que precisa pagar e o Hermes te lembra no vencimento.</p>
+                <span class="ex">"conta de luz de 120 reais, vence dia 18"</span>
+            </div>
+            <div class="b">
+                <div class="em">📅</div>
+                <h3>Sua agenda por voz</h3>
+                <p>Marque compromissos falando normal — ele te avisa um pouco antes, até por áudio.</p>
+                <span class="ex">"me avisa amanhã às 9h da reunião"</span>
+            </div>
+            <div class="b">
+                <div class="em">🎤</div>
+                <h3>Do seu jeito</h3>
+                <p>Por voz ou texto, no WhatsApp de sempre. Se quiser, ainda espelha na sua Google Agenda.</p>
+                <span class="ex">"quanto tenho pra pagar esse mês?"</span>
+            </div>
+        </div>
+
+        <div class="how">
+            <h2>Como funciona — em 3 passos</h2>
+            <div class="steps3">
+                <div class="s"><div class="n">1</div><div class="t">Crie sua conta<span>Nome, e-mail e senha.</span></div></div>
+                <div class="s"><div class="n">2</div><div class="t">Conecte o WhatsApp<span>Um código e pronto.</span></div></div>
+                <div class="s"><div class="n">3</div><div class="t">Fale com o Hermes<span>Ele cuida do resto.</span></div></div>
+            </div>
+        </div>
+
+        <div class="closing">
+            <a asp-page="/Cadastro" class="btn btn-hermes btn-lg">Começar agora — é grátis</a>
+        </div>
+    </div>
+</div>

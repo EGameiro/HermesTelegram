@@ -4,40 +4,63 @@
     ViewData["Title"] = "Criar conta";
     Layout = "_Layout";
 }
-<div class="d-flex justify-content-center align-items-center" style="min-height: 90vh;">
-    <div class="card p-4 shadow-sm" style="max-width: 440px; width: 100%;">
-        <h3 class="text-hermes mb-1"><i class="bi bi-robot"></i> Criar conta</h3>
-        <p class="text-muted mb-4">14 dias de teste grátis. Sem cartão.</p>
-        @if (Model.Erros.Any())
-        {
-            <div class="alert alert-danger py-2">
-                <ul class="mb-0">@foreach (var e in Model.Erros) { <li>@e</li> }</ul>
+<div class="container py-4" style="max-width: 900px;">
+    <div class="row g-4 align-items-center">
+        <div class="col-12 col-lg-6">
+            <div style="max-width: 420px;">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <span style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#5A4FCF,#7a6ff0);display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 6px 16px rgba(90,79,207,.3);">🤖</span>
+                    <span class="h5 mb-0 text-hermes fw-bold">Hermes</span>
+                </div>
+                <h3 class="fw-bold mb-2" style="letter-spacing:-.02em;">Seu assistente pessoal no WhatsApp</h3>
+                <p class="text-muted mb-3">
+                    Fale por áudio ou texto e o Hermes anota suas contas e compromissos —
+                    e te lembra na hora certa.
+                </p>
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2"><span class="me-2">💰</span> Nunca mais esqueça uma <strong>conta a pagar</strong></li>
+                    <li class="mb-2"><span class="me-2">📅</span> <strong>Compromissos por voz</strong>, com aviso na hora certa</li>
+                    <li class="mb-2"><span class="me-2">🎤</span> Por voz ou texto, no seu <strong>WhatsApp de sempre</strong></li>
+                </ul>
             </div>
-        }
-        <form method="post">
-            <div class="mb-3">
-                <label class="form-label">Nome completo</label>
-                <input asp-for="Input.Nome" class="form-control" autofocus />
+        </div>
+
+        <div class="col-12 col-lg-6">
+            <div class="card p-4 shadow-sm" style="max-width: 440px;">
+                <h4 class="mb-1">Criar conta</h4>
+                <p class="text-muted mb-4">14 dias de teste grátis. Sem cartão.</p>
+                @if (Model.Erros.Any())
+                {
+                    <div class="alert alert-danger py-2">
+                        <ul class="mb-0">@foreach (var e in Model.Erros) { <li>@e</li> }</ul>
+                    </div>
+                }
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label">Nome completo</label>
+                        <input asp-for="Input.Nome" class="form-control" autofocus />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">E-mail</label>
+                        <input asp-for="Input.Email" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Senha</label>
+                        <input asp-for="Input.Senha" type="password" class="form-control" />
+                        <div class="form-text">Mínimo 6 caracteres, com ao menos um número.</div>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input asp-for="Input.AceiteTermos" class="form-check-input" />
+                        <label class="form-check-label" asp-for="Input.AceiteTermos">
+                            Li e aceito os termos de uso e a política de privacidade.
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-hermes w-100">Criar minha conta</button>
+                </form>
+                <p class="text-center mt-3 mb-0 small">
+                    Já tem conta? <a asp-page="/Login/Index" class="text-hermes">Entrar</a>
+                </p>
             </div>
-            <div class="mb-3">
-                <label class="form-label">E-mail</label>
-                <input asp-for="Input.Email" class="form-control" />
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Senha</label>
-                <input asp-for="Input.Senha" type="password" class="form-control" />
-                <div class="form-text">Mínimo 6 caracteres, com ao menos um número.</div>
-            </div>
-            <div class="form-check mb-3">
-                <input asp-for="Input.AceiteTermos" class="form-check-input" />
-                <label class="form-check-label" asp-for="Input.AceiteTermos">
-                    Li e aceito os termos de uso e a política de privacidade.
-                </label>
-            </div>
-            <button type="submit" class="btn btn-hermes w-100">Criar minha conta</button>
-        </form>
-        <p class="text-center mt-3 mb-0 small">
-            Já tem conta? <a asp-page="/Login/Index" class="text-hermes">Entrar</a>
-        </p>
+        </div>
     </div>
 </div>

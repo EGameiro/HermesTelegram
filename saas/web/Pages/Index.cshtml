@@ -91,26 +91,14 @@
             <div class="fineprint">14 dias de teste grátis · sem cartão</div>
         </div>
 
-        <!--
-            ===== VIDEO DE DEMONSTRACAO =====
-            Para plugar o video depois:
-            1) Coloque o arquivo em  wwwroot/videos/hermes.mp4  (crie a pasta "videos").
-               (opcional: um poster em wwwroot/images/hermes-poster.jpg)
-            2) APAGUE o bloco <div class="ph">...</div> logo abaixo.
-            3) HABILITE o player: tire os marcadores de comentario ao redor do <video>.
-            Alternativa YouTube: no lugar do <video>, use
-               <iframe src="https://www.youtube.com/embed/SEU_ID" allowfullscreen></iframe>
-        -->
         <div class="video">
             <div class="frame">
-                <!-- <video controls playsinline poster="/images/hermes-poster.jpg"><source src="/videos/hermes.mp4" type="video/mp4" /></video> -->
-                <div class="ph">
-                    <div class="play"><i class="bi bi-play-fill"></i></div>
-                    <div style="font-weight:700;">Veja o Hermes em ação</div>
-                    <div style="opacity:.85;font-size:.85rem;margin-top:4px;">Vídeo em breve</div>
-                </div>
+                <video controls playsinline preload="metadata" poster="/images/hermes-poster.jpg">
+                    <source src="/videos/hermes.mp4" type="video/mp4" />
+                    Seu navegador não suporta vídeo.
+                </video>
             </div>
-            <div class="cap">30 segundos: cadastrar uma conta e agendar um compromisso por voz.</div>
+            <div class="cap">Veja como cadastrar uma conta e agendar um compromisso — por voz.</div>
         </div>
 
         <div class="cards">

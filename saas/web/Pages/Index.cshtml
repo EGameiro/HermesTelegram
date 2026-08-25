@@ -28,6 +28,20 @@
     .hero-lp .ctas .btn { padding: .7rem 1.4rem; font-weight: 600; border-radius: .7rem; }
     .hero-lp .fineprint { color: var(--lp-muted); font-size: .85rem; margin-top: 10px; }
 
+    .hero-lp .video { max-width: 300px; margin: 34px auto 0; }
+    .hero-lp .frame {
+        position: relative; aspect-ratio: 9 / 16; border-radius: 22px; overflow: hidden;
+        background: linear-gradient(160deg, #2a2450, #5A4FCF);
+        box-shadow: 0 16px 44px rgba(40,40,90,.25); display: flex; align-items: center; justify-content: center;
+    }
+    .hero-lp .frame video, .hero-lp .frame iframe { width: 100%; height: 100%; object-fit: cover; border: 0; display: block; }
+    .hero-lp .frame .ph { text-align: center; color: #fff; padding: 20px; }
+    .hero-lp .frame .play {
+        width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,.92); color: #5A4FCF;
+        display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 12px;
+    }
+    .hero-lp .video .cap { text-align: center; color: var(--lp-muted); font-size: .86rem; margin-top: 10px; }
+
     .hero-lp .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 40px 0 8px; }
     @@media (max-width: 760px) { .hero-lp .cards { grid-template-columns: 1fr; } }
     .hero-lp .b {
@@ -75,6 +89,28 @@
                 <a asp-page="/Login/Index" class="btn btn-outline-secondary">Já tenho conta</a>
             </div>
             <div class="fineprint">14 dias de teste grátis · sem cartão</div>
+        </div>
+
+        <!--
+            ===== VIDEO DE DEMONSTRACAO =====
+            Para plugar o video depois:
+            1) Coloque o arquivo em  wwwroot/videos/hermes.mp4  (crie a pasta "videos").
+               (opcional: um poster em wwwroot/images/hermes-poster.jpg)
+            2) APAGUE o bloco <div class="ph">...</div> logo abaixo.
+            3) HABILITE o player: tire os marcadores de comentario ao redor do <video>.
+            Alternativa YouTube: no lugar do <video>, use
+               <iframe src="https://www.youtube.com/embed/SEU_ID" allowfullscreen></iframe>
+        -->
+        <div class="video">
+            <div class="frame">
+                <!-- <video controls playsinline poster="/images/hermes-poster.jpg"><source src="/videos/hermes.mp4" type="video/mp4" /></video> -->
+                <div class="ph">
+                    <div class="play"><i class="bi bi-play-fill"></i></div>
+                    <div style="font-weight:700;">Veja o Hermes em ação</div>
+                    <div style="opacity:.85;font-size:.85rem;margin-top:4px;">Vídeo em breve</div>
+                </div>
+            </div>
+            <div class="cap">30 segundos: cadastrar uma conta e agendar um compromisso por voz.</div>
         </div>
 
         <div class="cards">
